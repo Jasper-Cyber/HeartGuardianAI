@@ -102,7 +102,7 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
   - Feature flags default: suggestions OFF, emergency OFF; expose `GET/PUT /settings`.
   - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.10, 11.1_
 
-- [ ] 19. ProviderService + endpoints — _Owner: maiabrunne_
+- [x] 19. ProviderService + endpoints — _Owner: maiabrunne_
   - Haversine distance; non-emergency ranking by distance; emergency ranking by capability then distance; preferred-doctor flag.
   - `GET/PUT /care/profile`, `GET /providers?lat&lon&emergency`.
   - _Requirements: 10.4, 10.5, 10.6, 10.7_
