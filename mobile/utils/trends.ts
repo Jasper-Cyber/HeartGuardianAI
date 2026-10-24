@@ -38,11 +38,14 @@ export function toTrendChartData(
   return out;
 }
 
-/** A compact axis label (month/day) from an ISO timestamp. */
+/**
+ * A compact axis label (month/day) from an ISO timestamp. Uses UTC getters so
+ * the label is deterministic regardless of the device's timezone.
+ */
 export function shortLabel(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return `${d.getMonth() + 1}/${d.getDate()}`;
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
 }
 
 /** Min/max across a series' resolved values, for chart scaling. Null when empty. */
