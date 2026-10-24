@@ -94,6 +94,13 @@ from ..db.models import AnomalyFinding, Baseline, Measurement, MetricType
 # contextual, so they are not in this list.
 _BASELINE_METRICS: tuple[MetricType, ...] = ("hr", "hrv", "spo2")
 
+# Public alias of the numeric metrics the engine baselines/trends.
+# BUGFIX (maiabrunne): ``routers/analysis.py`` (Task 11) imports ``NUMERIC_METRICS``
+# for /trends iteration + metric validation, but this module only defined the
+# private ``_BASELINE_METRICS``. Parallel PRs merged with mismatched names and broke
+# the import of ``app.main``. Expose the public name without changing any logic.
+NUMERIC_METRICS: tuple[MetricType, ...] = _BASELINE_METRICS
+
 # Severity bands ordered weakest -> strongest; used by the guardrail downgrade.
 _SEVERITY_ORDER: tuple[str, ...] = ("info", "review", "attention")
 
