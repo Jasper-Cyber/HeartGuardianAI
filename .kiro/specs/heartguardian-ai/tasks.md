@@ -149,7 +149,7 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
     disclaimer acknowledgement gating; feature-toggle behavior.
   - _Requirements: 9.1, 9.2_
 
-- [ ] 28. README, demo script, screenshots — _Owner: Jasper-Cyber (all contribute)_
+- [x] 28. README, demo script, screenshots — _Owner: Jasper-Cyber (all contribute)_
   - Install/config/run for backend and mobile; demo walkthrough; screenshot references.
   - Document the optional care-profile setup, provider suggestions on a warning, the (simulated-by-default,
     opt-in) emergency flow, and the experimental disclaimer; include how to safely enable a real notifier channel.
