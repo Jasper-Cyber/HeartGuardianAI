@@ -101,10 +101,17 @@ def _get_simulator():  # pragma: no cover - thin optional import
         return None
 
 
+# Number of readings generated per Start, so the dashboard has data immediately.
+_START_BATCH_STEPS = 168  # ~1 week at hourly cadence
+
+
 def _maybe_start_generation(state: SimState) -> None:  # pragma: no cover
     sim = _get_simulator()
-    if sim is not None and hasattr(sim, "start"):
-        sim.start()
+    if sim is None:
+        return
+    # Generate a batch for the currently selected scenario/seed.
+    if hasattr(sim, "generate"):
+        sim.generate(steps=_START_BATCH_STEPS, scenario=state.scenario, seed=state.seed)
 
 
 def _maybe_pause_generation(state: SimState) -> None:  # pragma: no cover

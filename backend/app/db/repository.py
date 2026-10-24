@@ -15,6 +15,10 @@ from typing import Iterable, Optional, Sequence
 from .connection import DEMO_USER_ID, get_connection, utc_now_iso
 from .models import Alert, AnomalyFinding, Baseline, Measurement, SimState
 
+# Sentinel for update_sim_state so callers can explicitly set cursor_ts=None (NULL)
+# versus omitting it (leave unchanged).
+_UNSET = object()
+
 # --------------------------------------------------------------------------- #
 # Measurements
 # --------------------------------------------------------------------------- #
@@ -280,9 +284,13 @@ def update_sim_state(
     scenario: Optional[str] = None,
     status: Optional[str] = None,
     seed: Optional[int] = None,
-    cursor_ts: Optional[str] = None,
+    cursor_ts: object = _UNSET,
 ) -> SimState:
-    """Patch the single sim_state row with any provided fields."""
+    """Patch the single sim_state row with any provided fields.
+
+    ``cursor_ts`` uses a sentinel default so that passing ``None`` explicitly
+    clears it (sets NULL) while omitting it leaves the stored value unchanged.
+    """
     sets: list[str] = []
     params: list[object] = []
     if scenario is not None:
@@ -294,7 +302,7 @@ def update_sim_state(
     if seed is not None:
         sets.append("seed = ?")
         params.append(seed)
-    if cursor_ts is not None:
+    if cursor_ts is not _UNSET:
         sets.append("cursor_ts = ?")
         params.append(cursor_ts)
     sets.append("updated_at = ?")
