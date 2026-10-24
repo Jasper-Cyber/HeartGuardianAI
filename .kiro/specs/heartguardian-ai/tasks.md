@@ -4,17 +4,17 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
 
 ## Phase 0 — Project scaffolding
 
-- [ ] 1. Initialize repository structure — _Owner: Jasper-Cyber_
+- [x] 1. Initialize repository structure — _Owner: Jasper-Cyber_
   - Create `backend/` (FastAPI) and `mobile/` (Expo) folders and root `README.md`.
   - Add root `.gitignore` (Python, Node, Expo, SQLite db files, `.env`).
   - _Requirements: 7, 8_
 
-- [ ] 2. Scaffold FastAPI backend skeleton — _Owner: Jasper-Cyber_
+- [x] 2. Scaffold FastAPI backend skeleton — _Owner: Jasper-Cyber_
   - Create `backend/pyproject.toml` (fastapi, uvicorn, sqlalchemy, numpy, pandas, scikit-learn, pytest, httpx).
   - Add `backend/app/main.py` with `/health` and CORS for the Expo dev client.
   - _Requirements: 7.1, 7.5_
 
-- [ ] 3. Scaffold Expo mobile app skeleton — _Owner: Helenawai_
+- [x] 3. Scaffold Expo mobile app skeleton — _Owner: Helenawai_
   - Create Expo + TypeScript + Expo Router app in `mobile/` with tab layout and placeholder screens.
   - Add `theme.ts` dark-blue token set and a `SimulatedDataRibbon` placeholder.
   - _Requirements: 1.7, 8.5_
@@ -32,12 +32,12 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
 
 ## Phase 2 — Simulator
 
-- [ ] 6. Implement SimulatorService with seedable RNG — _Owner: Rafael W_
+- [ ] 6. Implement SimulatorService with seedable RNG — _Owner: Raffy_
   - Scenario A (Normal), B (Gradual Deviation), C (Rhythm Irregularity) generators; occasional missing/low-quality samples.
   - Start / Pause / Reset / Scenario-select operations persisted to `sim_state`.
   - _Requirements: 2.1–2.9_
 
-- [ ] 7. Implement SensorAdapter interface + SimulatedSensorAdapter — _Owner: Rafael W_
+- [ ] 7. Implement SensorAdapter interface + SimulatedSensorAdapter — _Owner: Raffy_
   - Define `SensorAdapter` protocol; implement `SimulatedSensorAdapter`.
   - Add interface-only `AppleHealthAdapter`, `HealthConnectAdapter`, `BluetoothSensorAdapter` stubs.
   - _Requirements: 6.1–6.4_
@@ -48,11 +48,11 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
 
 ## Phase 3 — Analysis engine
 
-- [ ] 9. Implement baseline + rolling statistics — _Owner: Rafael W_
+- [ ] 9. Implement baseline + rolling statistics — _Owner: Raffy_
   - `compute_baseline`, `rolling_stats`; persist baselines.
   - _Requirements: 3.1, 3.2_
 
-- [ ] 10. Implement anomaly detectors — _Owner: Rafael W_
+- [ ] 10. Implement anomaly detectors — _Owner: Raffy_
   - persistent_shift, combination (HR↑ & HRV↓), rhythm_irregularity, data_quality.
   - Thresholds centralized in `analysis_config.py`; reproducible outputs.
   - _Requirements: 3.3–3.8_
@@ -63,7 +63,7 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
 
 ## Phase 4 — Alerts
 
-- [ ] 12. Implement AlertService — _Owner: Rafael W_
+- [ ] 12. Implement AlertService — _Owner: Raffy_
   - Map findings → `normal | trend_review | attention`; build explanation + next steps.
   - Always attach emergency guidance and experimental label; expose `GET /insights`.
   - _Requirements: 4.1–4.5_
@@ -135,7 +135,7 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
 
 ## Phase 7 — Tests & docs
 
-- [ ] 26. Python tests (pytest) — _Owner: Rafael W_
+- [ ] 26. Python tests (pytest) — _Owner: Raffy_
   - Simulator determinism, baseline math, each detector, missing-data, alert mapping, scenario transitions, API routes.
   - Provider distance ranking + emergency-capability ordering; emergency routing rule; payload assembly;
     feature flags respected (suggestions/emergency off => no flow); simulated dispatch records an event and sends nothing;

@@ -4,12 +4,73 @@ This file is the team's coordination guide. The single source of truth for *what
 [`.kiro/specs/heartguardian-ai/tasks.md`](.kiro/specs/heartguardian-ai/tasks.md); this file says
 *who* does it and *how* we work together without stepping on each other.
 
+## Getting started
+
+### Prerequisites
+Install these once. Versions below are what the project is scaffolded against (newer minor versions are usually fine):
+
+| Tool | Version used | Notes |
+|------|--------------|-------|
+| Git | 2.5+ | — |
+| Python | 3.11–3.13 | `python` on Windows (there is no `python3` alias here) |
+| Node.js | 20 LTS or newer | project scaffolded with Node 26 / npm 11 |
+| Expo | via `npx expo` | no global install needed |
+| Expo Go app | latest | on your phone, to run the mobile app without a native build |
+
+### 1. Clone and enter the repo
+```bash
+git clone https://github.com/Jasper-Cyber/HeartGuardianAI.git
+cd HeartGuardianAI
+```
+
+### 2. Run the backend (FastAPI)
+```bash
+cd backend
+python -m venv .venv
+# Windows (bash/Git Bash):
+source .venv/Scripts/activate
+# macOS/Linux:
+# source .venv/bin/activate
+
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+Verify: open http://localhost:8000/health (should return `{"status":"ok",...}`) and
+http://localhost:8000/docs for the interactive API.
+Run backend tests with `pytest` from the `backend/` directory.
+
+### 3. Run the mobile app (Expo)
+In a second terminal:
+```bash
+cd mobile
+npm install
+npm start          # opens Expo; scan the QR code with Expo Go, or press w for web
+```
+The app launches to a dark-blue Dashboard with placeholder screens and a "SIMULATED DATA" ribbon.
+
+> The mobile app talks to the backend at `http://localhost:8000`. On a physical phone, replace
+> `localhost` with your computer's LAN IP (the API base URL is configured in `mobile/api/` — Task 13).
+
+### First task per person
+Start here (full details in `tasks.md`). Open a branch per task (see Git workflow below).
+
+| Member | Start with | Then |
+|--------|-----------|------|
+| Jasper-Cyber | Task 4 (SQLite schema + repository) | 5, 8, 11 |
+| Raffy | Task 6 (SimulatorService) | 7, 9, 10, 12 |
+| maiabrunne | Task 18 (care/settings data layer) — after Task 4 lands | 19, 20, 21, 24, 25 |
+| Helenawai | Task 13 (API client + hooks) | 14, 15, 16, 17, 22, 23 |
+
+Tasks 1–3 (scaffolding) are **already done**, so everyone is unblocked. Jasper-Cyber's Task 4 is the
+next backend dependency; maiabrunne's Task 18 builds on it, so maiabrunne can begin with the provider
+directory seed / mock while Task 4 is in review.
+
 ## Team
 
 | Member | GitHub | Role (reference only — work is not limited to role) |
 |--------|--------|------------------------------------------------------|
 | Jasper-Cyber | `Jasper-Cyber` | Founder / project lead |
-| Rafael W | `Rafael W` | Bio specialist |
+| Raffy | `Raffy` | Bio specialist |
 | maiabrunne | `maiabrunne` | Data specialist 1 |
 | Helenawai | `Helenawai` | Data specialist 2 |
 
@@ -27,7 +88,7 @@ people rarely touch the same file.
 - Coordinates the README/demo (task 28); everyone contributes their section.
 - **Owns:** `backend/app/main.py`, `backend/app/db/`, `backend/app/routers/` (scenario, analysis wiring), `seed_data.py`, root `README.md`.
 
-### Rafael W — Analytics & simulation engine (Tasks 6, 7, 9, 10, 12, 26)
+### Raffy — Analytics & simulation engine (Tasks 6, 7, 9, 10, 12, 26)
 - SimulatorService (scenarios A/B/C), SensorAdapter + SimulatedSensorAdapter.
 - AnalysisEngine: baseline, rolling stats, anomaly detectors; AlertService.
 - Python test suite (task 26).
@@ -49,7 +110,7 @@ people rarely touch the same file.
 | Member | Tasks | Notes |
 |--------|-------|-------|
 | Jasper-Cyber | 7 | Smaller-but-foundational tasks; also owns demo coordination |
-| Rafael W | 6 | Logic-heavy engine + Python tests |
+| Raffy | 6 | Logic-heavy engine + Python tests |
 | maiabrunne | 6 | Full-stack feature (backend services + 2 mobile screens) |
 | Helenawai | 9 | Many screens but each is UI-focused; includes TS tests |
 
@@ -68,6 +129,10 @@ Phase 7 (26–28) tests + docs     → ongoing; finalize last
 
 Front-end owners (Helenawai, maiabrunne) should work against **mock API responses** early so they
 are never blocked waiting on the backend.
+
+> **Unblock note:** Tasks 1–3 (scaffolding) are already done and committed — `backend/` and
+> `mobile/` exist and run. All four members can start their first task now (see "First task per
+> person" in Getting Started below).
 
 ## Git workflow (one branch per task)
 
