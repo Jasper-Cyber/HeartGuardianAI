@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 
-import type { ProviderSuggestion } from "@/api/care";
+import type { ProviderSuggestion } from "@/api/types";
 import { theme } from "@/theme";
 
 /**

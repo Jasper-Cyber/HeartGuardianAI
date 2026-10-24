@@ -176,7 +176,22 @@ are never blocked waiting on the backend.
   separate backend-owner decision; for now the History screen derives a single recent entry from
   the current non-normal insight.
 
-- **Four routers imported but never registered in `main.py` (maiabrunne — fix in progress).** A later merge
+- **[RESOLVED] Care-network duplication + wrong emergency contract in shared `api/` layer (maiabrunne).**
+  My Tasks 24/25 mobile code originally used a stand-in `mobile/api/care.ts` (written before the
+  shared Task 13 client existed). When `fix/mobile-api-contracts` (Task 13) merged, the shared
+  `api/{client,types,hooks}.ts` duplicated almost all of `care.ts` (Provider, ProviderSuggestion,
+  EmergencyContact, CareProfile, EmergencyDecision, Settings, ApiError, and the care/emergency
+  hooks). Additionally, the shared layer's **emergency** pieces were typed against the design doc,
+  not the running backend: `EmergencyDecision` was nested (`recipient`, `payload`) and
+  `useEmergencyEvaluation`/`useDispatch` took `{lat,lon}` / `{channel,confirm}` — but the backend
+  `/emergency/evaluate` returns a FLAT `DecisionOut` and `/dispatch` takes
+  `{lat,lon,findingSummary,confirmed}` and re-evaluates routing server-side.
+  Resolution (done): deleted `care.ts`; pointed the care/emergency components + `emergency.tsx` at
+  the shared `api/` layer; corrected the shared `EmergencyDecision`/`DispatchResult`/`DispatchEvent`
+  types and the `evaluate`/`dispatch` client+hook signatures to match the real backend. Verified:
+  `tsc --noEmit` clean and all 33 mobile Jest tests pass (incl. Helenawai's client/trends suites).
+
+- **[RESOLVED] Four routers imported but never registered in `main.py` (maiabrunne).** A later merge
   mangled the router-registration block in `backend/app/main.py`: it `import`s
   `analysis, emergency, insights, measurements, providers, settings, simulator`, but only calls
   `app.include_router(...)` for `measurements`, `simulator`, and `insights`. As a result

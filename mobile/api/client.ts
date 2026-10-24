@@ -15,9 +15,11 @@ import Constants from "expo-constants";
 import type {
   ApiErrorBody,
   CareProfile,
-  DispatchChannel,
+  DispatchArgs,
   DispatchEvent,
+  DispatchResult,
   EmergencyDecision,
+  EvaluateArgs,
   InsightResponse,
   MeasurementsResponse,
   ProviderSuggestion,
@@ -192,12 +194,30 @@ export const api = {
     return res.items;
   },
 
-  // Emergency
-  evaluateEmergency: (body: { lat: number; lon: number }) =>
-    request<EmergencyDecision | null>("/emergency/evaluate", { method: "POST", body }),
+  // Emergency. The backend /evaluate returns a flat decision; /dispatch takes
+  // location + findingSummary + confirmed (it re-evaluates routing server-side).
+  evaluateEmergency: (body: EvaluateArgs) =>
+    request<EmergencyDecision>("/emergency/evaluate", {
+      method: "POST",
+      body: {
+        lat: body.lat,
+        lon: body.lon,
+        findingSummary: body.findingSummary ?? "Experimental monitoring signal.",
+      },
+    }),
 
-  dispatchEmergency: (body: { channel: DispatchChannel; confirm: boolean }) =>
-    request<DispatchEvent>("/emergency/dispatch", { method: "POST", body }),
+  dispatchEmergency: (body: DispatchArgs) =>
+    request<DispatchResult>("/emergency/dispatch", {
+      method: "POST",
+      body: {
+        lat: body.lat,
+        lon: body.lon,
+        findingSummary: body.findingSummary ?? "Experimental monitoring signal.",
+        channel: body.channel ?? "simulated",
+        confirmed: body.confirmed,
+        alertId: body.alertId ?? null,
+      },
+    }),
 
   getDispatchHistory: (signal?: AbortSignal) =>
     request<DispatchEvent[]>("/emergency/history", { signal }),

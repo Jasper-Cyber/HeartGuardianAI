@@ -189,22 +189,62 @@ export interface DispatchPayload {
   isExperimental: true;
 }
 
+/**
+ * POST /emergency/evaluate response. The backend returns a FLAT DecisionOut
+ * (not a nested recipient object): `enabled` plus the chosen recipient's id/name,
+ * routing reason, payload preview, and channel. When the feature is disabled the
+ * backend returns `{ enabled: false }` with the other fields null.
+ */
 export interface EmergencyDecision {
-  recipient: Provider;
-  routingReason: RoutingReason;
-  payload: DispatchPayload;
-  channel: DispatchChannel;
+  enabled: boolean;
+  recipientProviderId?: number | null;
+  recipientName?: string | null;
+  routingReason?: RoutingReason | null;
+  payload?: DispatchPayload | null;
+  channel?: DispatchChannel | null;
+  emergencyGuidance: string;
+  isExperimental: boolean;
 }
 
-export interface DispatchEvent {
-  id: number;
-  alertId?: number;
-  recipient?: Provider;
+/** POST /emergency/dispatch response. */
+export interface DispatchResult {
+  id: number | null;
+  recipientProviderId: number | null;
   routingReason: RoutingReason;
   channel: DispatchChannel;
   status: DispatchStatus;
   payload: DispatchPayload;
-  createdAt: string;
+  emergencyGuidance: string;
+  isExperimental: boolean;
+}
+
+/**
+ * GET /emergency/history item. The backend returns a FLAT list (no nested
+ * recipient/payload): recipient id, routing reason, channel, status, timestamp.
+ */
+export interface DispatchEvent {
+  id: number | null;
+  recipientProviderId: number | null;
+  routingReason: RoutingReason;
+  channel: DispatchChannel;
+  status: DispatchStatus;
+  createdAt?: string | null;
+}
+
+/** Args for POST /emergency/evaluate and /dispatch (backend re-evaluates routing on dispatch). */
+export interface EvaluateArgs {
+  lat: number | null;
+  lon: number | null;
+  findingSummary?: string;
+}
+
+export interface DispatchArgs {
+  lat: number | null;
+  lon: number | null;
+  findingSummary?: string;
+  channel?: DispatchChannel;
+  confirmed: boolean;
+  alertId?: number | null;
 }
 
 // ---------------------------------------------------------------------------

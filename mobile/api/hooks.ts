@@ -18,9 +18,11 @@ import {
 import { api } from "./client";
 import type {
   CareProfile,
-  DispatchChannel,
+  DispatchArgs,
   DispatchEvent,
+  DispatchResult,
   EmergencyDecision,
+  EvaluateArgs,
   InsightResponse,
   ProviderSuggestion,
   Reading,
@@ -206,27 +208,22 @@ export function useAckDisclaimer(): UseMutationResult<Settings, unknown, void> {
   });
 }
 
-/** Evaluate the current alert + location into a routing decision (or null when disabled). */
+/** Evaluate the current alert + location into a routing decision (flat; `enabled:false` when off). */
 export function useEmergencyEvaluation(): UseMutationResult<
-  EmergencyDecision | null,
+  EmergencyDecision,
   unknown,
-  { lat: number; lon: number }
+  EvaluateArgs
 > {
   return useMutation({
-    mutationFn: (loc: { lat: number; lon: number }) => api.evaluateEmergency(loc),
+    mutationFn: (args: EvaluateArgs) => api.evaluateEmergency(args),
   });
 }
 
 /** Perform a dispatch (simulated by default; real requires confirm + opt-in). */
-export function useDispatch(): UseMutationResult<
-  DispatchEvent,
-  unknown,
-  { channel: DispatchChannel; confirm: boolean }
-> {
+export function useDispatch(): UseMutationResult<DispatchResult, unknown, DispatchArgs> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { channel: DispatchChannel; confirm: boolean }) =>
-      api.dispatchEmergency(body),
+    mutationFn: (args: DispatchArgs) => api.dispatchEmergency(args),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.dispatchHistory });
     },
