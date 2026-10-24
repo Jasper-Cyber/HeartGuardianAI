@@ -75,8 +75,8 @@ from .routers import (  # noqa: E402
 
 app.include_router(measurements.router)
 app.include_router(simulator.router)
-
-# insights router (Raffy, Task 12): GET /insights — explainable, non-diagnostic alerts.
-from .routers import insights  # noqa: E402
-
-app.include_router(insights.router)
+app.include_router(insights.router)   # Raffy, Task 12: GET /insights
+app.include_router(analysis.router)   # Jasper, Task 11: POST /analysis/run, GET /trends
+app.include_router(settings.router)   # Task 18/21: GET/PUT /settings, POST /settings/disclaimer-ack
+app.include_router(providers.router)  # Task 19: GET /providers, GET/PUT /care/profile
+app.include_router(emergency.router)  # Task 20: POST /emergency/evaluate|dispatch, GET /emergency/history

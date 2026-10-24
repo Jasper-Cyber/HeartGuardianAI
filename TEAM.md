@@ -173,6 +173,22 @@ are never blocked waiting on the backend.
   three built+tested endpoints). Tracked on branch `fix/mobile-api-contracts`. The missing
   past-alerts endpoint is a separate backend-owner decision.
 
+- **Four routers imported but never registered in `main.py` (maiabrunne — fix in progress).** A later merge
+  mangled the router-registration block in `backend/app/main.py`: it `import`s
+  `analysis, emergency, insights, measurements, providers, settings, simulator`, but only calls
+  `app.include_router(...)` for `measurements`, `simulator`, and `insights`. As a result
+  **`settings`, `providers`, `emergency`, and `analysis` are never mounted**, so the running app
+  serves only `/health`, `/insights`, `/measurements`, `/scenario`, `/simulator/{action}`. Every
+  other endpoint 404s — verified missing: `/settings`, `/settings/disclaimer-ack`, `/care/profile`,
+  `/providers`, `/emergency/evaluate|dispatch|history`, `/analysis/run`, `/trends`. This is the
+  root cause of the `assert 404 == 200/422/403` failures in `test_api_settings.py`,
+  `test_provider_service.py`, and `test_emergency_service.py` (NOT a per-module logic bug, so it is
+  distinct from the ~41 failures above). It is also distinct from the mobile API-contract bugs
+  (owner: Helenawai) — those are client-side response-shape issues; this is server-side routes
+  simply not being mounted.
+  Fix: add `app.include_router(...)` for `analysis`, `settings`, `providers`, and `emergency` in
+  `main.py`, and drop the duplicate `from .routers import insights` line.
+
 ## Git workflow (one branch per task)
 
 Never commit directly to `main`.
