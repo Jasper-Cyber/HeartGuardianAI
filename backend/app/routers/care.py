@@ -1,31 +1,30 @@
-"""Care-network + settings + emergency routers (Tasks 18-21, Owner: maiabrunne).
+"""Care profile / providers / emergency routers (Tasks 19-21, 24-25, Owner: maiabrunne).
 
-Endpoint groups (all additive to the shared ``main.py``):
+Builds on the Task 18 data layer (``care_repository`` + ``care_models``) and the
+Task 18/21 settings router (``routers/settings.py``, which owns ``/settings`` and
+``/settings/disclaimer-ack``). This module adds the remaining care-network surface:
 
-- ``/settings``                feature flags + disclaimer acknowledgement (Req 10.1, 11.1, 12.5)
 - ``/care/profile``            get/update care profile + emergency contacts (Req 10)
 - ``/providers``               ranked provider suggestions (Req 10.4–10.7)
+- ``/disclaimer``              shared disclaimer + concise experimental notice (Req 12.1, 12.6)
 - ``/emergency/evaluate``      routing decision + payload preview (Req 11.2–11.4)
 - ``/emergency/dispatch``      gated dispatch, simulated by default (Req 11.5–11.6)
 - ``/emergency/history``       dispatch history (Req 11.7)
 
-A dependency opens one SQLite connection per request (via Task 4's
-``get_connection``) and lazily seeds the synthetic provider directory. The tables
-themselves are created by Task 4's ``init_db()`` at app startup.
+The repository manages its own connections, so these routes need no connection
+dependency.
 """
 from __future__ import annotations
 
-from collections.abc import Iterator
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from .. import disclaimer as disclaimer_copy
 from .. import emergency_config as cfg
 from ..db import care_repository as repo
-from ..db.connection import get_connection
-from ..db.provider_seed import seed_providers
+from ..db.care_models import CareProfile, EmergencyContact
 from ..services.emergency import EmergencyError, EmergencyService
 from ..services.provider import ProviderService
 
@@ -33,114 +32,59 @@ router = APIRouter(tags=["care-network"])
 
 
 # ---------------------------------------------------------------------------
-# Per-request connection dependency.
-# Uses Task 4's get_connection() (sqlite3's native context manager: commits on
-# success, rolls back on error). We close the connection ourselves afterwards.
+# Pydantic models (camelCase wire shapes)
 # ---------------------------------------------------------------------------
-def get_conn() -> Iterator[Any]:
-    """Yield a request-scoped SQLite connection with the provider directory seeded.
-
-    Commits on success, rolls back on error, and always closes. We manage the
-    transaction explicitly rather than nesting sqlite3's connection context
-    manager, so finalizing this generator never operates on a closed connection.
-    """
-    conn = get_connection()
-    try:
-        seed_providers(conn)  # idempotent: populates the synthetic directory once
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
-
-
-# ---------------------------------------------------------------------------
-# Pydantic models
-# ---------------------------------------------------------------------------
-class SettingsIn(BaseModel):
-    warnings_enabled: bool | None = Field(default=None, alias="warningsEnabled")
-    suggestions_enabled: bool | None = Field(default=None, alias="suggestionsEnabled")
-    emergency_enabled: bool | None = Field(default=None, alias="emergencyEnabled")
-
-    model_config = {"populate_by_name": True}
-
-
-class SettingsOut(BaseModel):
-    warningsEnabled: bool
-    suggestionsEnabled: bool
-    emergencyEnabled: bool
-    disclaimerAckAt: str | None
-
-
 class EmergencyContactModel(BaseModel):
     name: str
-    relationship: str | None = None
+    relationship: Optional[str] = None
     phone: str
     priority: int = 1
 
 
 class CareProfileModel(BaseModel):
-    fullName: str | None = None
-    phone: str | None = None
-    defaultLat: float | None = None
-    defaultLon: float | None = None
-    preferredProviderId: int | None = None
+    fullName: Optional[str] = None
+    phone: Optional[str] = None
+    defaultLat: Optional[float] = None
+    defaultLon: Optional[float] = None
+    preferredProviderId: Optional[int] = None
     emergencyContacts: list[EmergencyContactModel] = Field(default_factory=list)
+
+    @classmethod
+    def from_model(cls, p: CareProfile | None) -> "CareProfileModel":
+        if p is None:
+            return cls()
+        return cls(
+            fullName=p.full_name,
+            phone=p.phone,
+            defaultLat=p.default_lat,
+            defaultLon=p.default_lon,
+            preferredProviderId=p.preferred_provider_id,
+            emergencyContacts=[
+                EmergencyContactModel(
+                    name=c.name, relationship=c.relationship, phone=c.phone, priority=c.priority
+                )
+                for c in p.emergency_contacts
+            ],
+        )
 
 
 class EvaluateIn(BaseModel):
     alertState: str
-    lat: float | None = None
-    lon: float | None = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
     locationApproximate: bool = False
 
 
 class DispatchIn(BaseModel):
     decision: dict[str, Any]
     confirmed: bool = False
-    channel: str | None = None
-    alertId: int | None = None
+    channel: Optional[str] = None
+    alertId: Optional[int] = None
 
 
 # ---------------------------------------------------------------------------
-# Settings + disclaimer
+# Disclaimer
 # ---------------------------------------------------------------------------
-def _settings_out(s: dict[str, Any]) -> SettingsOut:
-    return SettingsOut(
-        warningsEnabled=s["warnings_enabled"],
-        suggestionsEnabled=s["suggestions_enabled"],
-        emergencyEnabled=s["emergency_enabled"],
-        disclaimerAckAt=s["disclaimer_ack_at"],
-    )
-
-
-@router.get("/settings", response_model=SettingsOut)
-def get_settings(conn=Depends(get_conn)) -> SettingsOut:
-    """Return feature flags (suggestions/emergency default OFF) (Req 10.1, 11.1)."""
-    return _settings_out(repo.get_settings(conn))
-
-
-@router.put("/settings", response_model=SettingsOut)
-def put_settings(body: SettingsIn, conn=Depends(get_conn)) -> SettingsOut:
-    """Patch feature flags; only provided fields change."""
-    updated = repo.update_settings(
-        conn,
-        warnings_enabled=body.warnings_enabled,
-        suggestions_enabled=body.suggestions_enabled,
-        emergency_enabled=body.emergency_enabled,
-    )
-    return _settings_out(updated)
-
-
-@router.post("/settings/disclaimer-ack")
-def ack_disclaimer(conn=Depends(get_conn)) -> dict[str, str]:
-    """Record the one-time disclaimer acknowledgement (Req 12.5)."""
-    ts = repo.record_disclaimer_ack(conn)
-    return {"disclaimerAckAt": ts}
-
-
 @router.get("/disclaimer")
 def get_disclaimer() -> dict[str, str]:
     """Return the shared disclaimer + concise experimental notice (Req 12.1, 12.6)."""
@@ -154,17 +98,30 @@ def get_disclaimer() -> dict[str, str]:
 # Care profile
 # ---------------------------------------------------------------------------
 @router.get("/care/profile", response_model=CareProfileModel)
-def get_care_profile(conn=Depends(get_conn)) -> dict[str, Any]:
+def get_care_profile() -> CareProfileModel:
     """Return the care profile + emergency contacts (Req 10.2)."""
-    return repo.get_care_profile(conn)
+    return CareProfileModel.from_model(repo.get_care_profile())
 
 
 @router.put("/care/profile", response_model=CareProfileModel)
-def put_care_profile(body: CareProfileModel, conn=Depends(get_conn)) -> dict[str, Any]:
+def put_care_profile(body: CareProfileModel) -> CareProfileModel:
     """Create/replace the care profile + contacts (Req 10.2, 10.3)."""
-    if body.preferredProviderId is not None and repo.get_provider(conn, body.preferredProviderId) is None:
+    if body.preferredProviderId is not None and repo.get_provider(body.preferredProviderId) is None:
         raise HTTPException(status_code=422, detail="preferredProviderId is not a known provider")
-    return repo.upsert_care_profile(conn, body.model_dump())
+    profile = CareProfile(
+        full_name=body.fullName,
+        phone=body.phone,
+        default_lat=body.defaultLat,
+        default_lon=body.defaultLon,
+        preferred_provider_id=body.preferredProviderId,
+        emergency_contacts=[
+            EmergencyContact(
+                name=c.name, relationship=c.relationship, phone=c.phone, priority=c.priority
+            )
+            for c in body.emergencyContacts
+        ],
+    )
+    return CareProfileModel.from_model(repo.upsert_care_profile(profile))
 
 
 # ---------------------------------------------------------------------------
@@ -175,14 +132,33 @@ def get_providers(
     lat: float = Query(...),
     lon: float = Query(...),
     emergency: bool = Query(False),
-    conn=Depends(get_conn),
 ) -> dict[str, Any]:
     """Ranked provider suggestions near a location (Req 10.4–10.7, 10.10)."""
-    profile = repo.get_care_profile(conn)
-    suggestions = ProviderService(conn).suggest(
-        lat, lon, emergency=emergency, preferred_id=profile.get("preferredProviderId")
-    )
-    return {"suggestions": suggestions, "isSynthetic": True}
+    profile = repo.get_care_profile()
+    preferred_id = profile.preferred_provider_id if profile else None
+    suggestions = ProviderService().suggest(lat, lon, emergency=emergency, preferred_id=preferred_id)
+    return {
+        "suggestions": [
+            {
+                "provider": {
+                    "id": s.provider.id,
+                    "kind": s.provider.kind,
+                    "name": s.provider.name,
+                    "specialty": s.provider.specialty,
+                    "canHandleCardiacEmergency": s.provider.can_handle_cardiac_emergency,
+                    "phone": s.provider.phone,
+                    "address": s.provider.address,
+                    "lat": s.provider.lat,
+                    "lon": s.provider.lon,
+                    "isSynthetic": s.provider.is_synthetic,
+                },
+                "distanceKm": s.distance_km,
+                "isPreferred": s.is_preferred,
+            }
+            for s in suggestions
+        ],
+        "isSynthetic": True,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -194,9 +170,9 @@ def _handle_emergency_error(err: EmergencyError) -> HTTPException:
 
 
 @router.post("/emergency/evaluate")
-def emergency_evaluate(body: EvaluateIn, conn=Depends(get_conn)) -> dict[str, Any]:
+def emergency_evaluate(body: EvaluateIn) -> dict[str, Any]:
     """Return a routing decision + payload preview, or ``enabled:false`` (Req 11.2–11.4)."""
-    service = EmergencyService(conn)
+    service = EmergencyService()
     try:
         decision = service.evaluate(
             alert_state=body.alertState,
@@ -209,10 +185,10 @@ def emergency_evaluate(body: EvaluateIn, conn=Depends(get_conn)) -> dict[str, An
 
     if decision is None:
         # Either the feature is off or the state is not an emergency trigger.
-        settings = repo.get_settings(conn)
+        enabled = repo.get_settings().emergency_enabled
         return {
             "decision": None,
-            "enabled": settings["emergency_enabled"],
+            "enabled": enabled,
             "emergencyGuidance": cfg.STATIC_EMERGENCY_GUIDANCE,
             "notice": disclaimer_copy.EXPERIMENTAL_NOTICE,
         }
@@ -225,15 +201,15 @@ def emergency_evaluate(body: EvaluateIn, conn=Depends(get_conn)) -> dict[str, An
 
 
 @router.post("/emergency/dispatch")
-def emergency_dispatch(body: DispatchIn, conn=Depends(get_conn)) -> dict[str, Any]:
+def emergency_dispatch(body: DispatchIn) -> dict[str, Any]:
     """Perform a gated dispatch; simulated by default, real requires opt-in (Req 11.5–11.6)."""
     # Guard: never dispatch when the feature is disabled (Req 11.1).
-    if not repo.get_settings(conn)["emergency_enabled"]:
+    if not repo.get_settings().emergency_enabled:
         raise HTTPException(
             status_code=403,
             detail="The emergency-response feature is disabled. Enable it in settings first.",
         )
-    service = EmergencyService(conn)
+    service = EmergencyService()
     try:
         result = service.dispatch(
             body.decision,
@@ -249,6 +225,21 @@ def emergency_dispatch(body: DispatchIn, conn=Depends(get_conn)) -> dict[str, An
 
 
 @router.get("/emergency/history")
-def emergency_history(conn=Depends(get_conn)) -> dict[str, Any]:
+def emergency_history() -> dict[str, Any]:
     """Return past dispatch events, newest first (Req 11.7)."""
-    return {"events": repo.list_dispatch_events(conn)}
+    events = repo.list_dispatch_events()
+    return {
+        "events": [
+            {
+                "id": e.id,
+                "alertId": e.alert_id,
+                "recipientProviderId": e.recipient_provider_id,
+                "routingReason": e.routing_reason,
+                "channel": e.channel,
+                "status": e.status,
+                "payload": e.payload,  # JSON text as stored
+                "createdAt": e.created_at,
+            }
+            for e in events
+        ]
+    }

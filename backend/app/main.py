@@ -23,6 +23,10 @@ from .db.connection import init_db
 async def lifespan(_app: FastAPI):
     # Create tables and seed the demo user + sim_state on startup (idempotent).
     init_db()
+    # Seed the synthetic provider directory (idempotent; no-op if already seeded).
+    from .db.seed_providers import seed_providers
+
+    seed_providers()
     yield
 
 
@@ -59,9 +63,10 @@ def health() -> dict[str, str]:
 # Each feature owner appends ONE line here as their router lands (see TEAM.md
 # "Shared files" guidance). Keep these additive to avoid merge conflicts.
 # ---------------------------------------------------------------------------
-from .routers import care, measurements, simulator  # noqa: E402
+from .routers import care, measurements, settings, simulator  # noqa: E402
 
 app.include_router(measurements.router)
 app.include_router(simulator.router)
-# Care-network / settings / emergency routers (Tasks 18-21, Owner: maiabrunne).
+app.include_router(settings.router)
+# Care profile / providers / emergency routers (Tasks 19-21, 24-25, Owner: maiabrunne).
 app.include_router(care.router)

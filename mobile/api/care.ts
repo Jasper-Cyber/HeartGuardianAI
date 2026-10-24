@@ -118,8 +118,18 @@ export interface DispatchEvent {
   routingReason: RoutingReason;
   channel: DispatchChannel;
   status: string;
-  payload: DispatchPayload;
+  /** Stored as JSON text by the backend; use `parseDispatchPayload` to read it. */
+  payload: string;
   createdAt: string;
+}
+
+/** Safely parse a dispatch event's JSON payload string. Returns null on bad data. */
+export function parseDispatchPayload(payload: string): DispatchPayload | null {
+  try {
+    return JSON.parse(payload) as DispatchPayload;
+  } catch {
+    return null;
+  }
 }
 
 export interface Settings {

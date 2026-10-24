@@ -1,305 +1,311 @@
-"""Repository functions for the care-network tables (Task 18, Owner: maiabrunne).
+"""Repository functions for the care-network tables (Task 18).
 
-Thin, well-typed data-access helpers over the ``user_settings``,
-``care_profiles``, ``emergency_contacts``, ``providers`` and ``dispatch_events``
-tables. Services depend on these functions, not on raw SQL, so swapping the
-storage layer (e.g. to Task 4's repository or TimescaleDB later) stays localized.
-
-All functions accept an explicit :class:`sqlite3.Connection` so callers control
-transaction boundaries (and tests can share one in-memory db).
+Scope: user_settings, care_profiles, emergency_contacts, providers,
+dispatch_events. Services (ProviderService / EmergencyService, Tasks 19-20)
+call these; they do not embed SQL.
 """
 from __future__ import annotations
 
-import json
 import sqlite3
-from datetime import datetime, timezone
-from typing import Any
+from typing import Optional
 
-from .connection import DEMO_USER_ID
+from .care_models import (
+    CareProfile,
+    DispatchEvent,
+    EmergencyContact,
+    Provider,
+    UserSettings,
+)
+from .connection import DEMO_USER_ID, get_connection, utc_now_iso
 
+# --------------------------------------------------------------------------- #
+# User settings / feature flags
+# --------------------------------------------------------------------------- #
 
-def _now() -> str:
-    """Current UTC time as an ISO-8601 string (seconds precision, ``Z`` suffix)."""
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-# ---------------------------------------------------------------------------
-# user_settings
-# ---------------------------------------------------------------------------
-_DEFAULT_SETTINGS = {
-    "warnings_enabled": True,
-    "suggestions_enabled": False,
-    "emergency_enabled": False,
-    "disclaimer_ack_at": None,
-}
-
-
-def get_settings(conn: sqlite3.Connection, user_id: int = DEMO_USER_ID) -> dict[str, Any]:
-    """Return the user's settings, creating a default row on first read."""
-    row = conn.execute(
-        "SELECT warnings_enabled, suggestions_enabled, emergency_enabled, disclaimer_ack_at "
-        "FROM user_settings WHERE user_id = ?",
-        (user_id,),
-    ).fetchone()
-    if row is None:
-        conn.execute(
-            "INSERT INTO user_settings "
-            "(user_id, warnings_enabled, suggestions_enabled, emergency_enabled, updated_at) "
-            "VALUES (?, 1, 0, 0, ?)",
-            (user_id, _now()),
-        )
-        return {**_DEFAULT_SETTINGS}
-    return {
-        "warnings_enabled": bool(row["warnings_enabled"]),
-        "suggestions_enabled": bool(row["suggestions_enabled"]),
-        "emergency_enabled": bool(row["emergency_enabled"]),
-        "disclaimer_ack_at": row["disclaimer_ack_at"],
-    }
+def get_settings(*, user_id: int = DEMO_USER_ID) -> UserSettings:
+    """Return the user's settings, creating defaults (opt-in off) on first access."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM user_settings WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if row is None:
+            now = utc_now_iso()
+            conn.execute(
+                """
+                INSERT INTO user_settings
+                    (user_id, warnings_enabled, suggestions_enabled, emergency_enabled, updated_at)
+                VALUES (?, 1, 0, 0, ?)
+                """,
+                (user_id, now),
+            )
+            conn.commit()
+            row = conn.execute(
+                "SELECT * FROM user_settings WHERE user_id = ?", (user_id,)
+            ).fetchone()
+    return _row_to_settings(row)
 
 
 def update_settings(
-    conn: sqlite3.Connection,
     *,
-    warnings_enabled: bool | None = None,
-    suggestions_enabled: bool | None = None,
-    emergency_enabled: bool | None = None,
+    warnings_enabled: Optional[bool] = None,
+    suggestions_enabled: Optional[bool] = None,
+    emergency_enabled: Optional[bool] = None,
+    disclaimer_ack_at: Optional[str] = None,
     user_id: int = DEMO_USER_ID,
-) -> dict[str, Any]:
-    """Patch feature flags (only the provided fields change) and return the result."""
-    current = get_settings(conn, user_id)
-    merged = {
-        "warnings_enabled": current["warnings_enabled"] if warnings_enabled is None else warnings_enabled,
-        "suggestions_enabled": current["suggestions_enabled"] if suggestions_enabled is None else suggestions_enabled,
-        "emergency_enabled": current["emergency_enabled"] if emergency_enabled is None else emergency_enabled,
-    }
-    conn.execute(
-        "UPDATE user_settings SET warnings_enabled = ?, suggestions_enabled = ?, "
-        "emergency_enabled = ?, updated_at = ? WHERE user_id = ?",
-        (
-            int(merged["warnings_enabled"]),
-            int(merged["suggestions_enabled"]),
-            int(merged["emergency_enabled"]),
-            _now(),
-            user_id,
-        ),
-    )
-    return get_settings(conn, user_id)
+) -> UserSettings:
+    """Patch any provided settings fields. Ensures a row exists first."""
+    get_settings(user_id=user_id)  # ensure row exists
+
+    sets: list[str] = []
+    params: list[object] = []
+    if warnings_enabled is not None:
+        sets.append("warnings_enabled = ?")
+        params.append(1 if warnings_enabled else 0)
+    if suggestions_enabled is not None:
+        sets.append("suggestions_enabled = ?")
+        params.append(1 if suggestions_enabled else 0)
+    if emergency_enabled is not None:
+        sets.append("emergency_enabled = ?")
+        params.append(1 if emergency_enabled else 0)
+    if disclaimer_ack_at is not None:
+        sets.append("disclaimer_ack_at = ?")
+        params.append(disclaimer_ack_at)
+    sets.append("updated_at = ?")
+    params.append(utc_now_iso())
+    params.append(user_id)
+
+    with get_connection() as conn:
+        conn.execute(f"UPDATE user_settings SET {', '.join(sets)} WHERE user_id = ?", params)
+        conn.commit()
+    return get_settings(user_id=user_id)
 
 
-def record_disclaimer_ack(conn: sqlite3.Connection, user_id: int = DEMO_USER_ID) -> str:
-    """Record that the experimental disclaimer was acknowledged; return the timestamp (Req 12.5)."""
-    get_settings(conn, user_id)  # ensure a row exists
-    ts = _now()
-    conn.execute(
-        "UPDATE user_settings SET disclaimer_ack_at = ?, updated_at = ? WHERE user_id = ?",
-        (ts, ts, user_id),
-    )
-    return ts
+def acknowledge_disclaimer(*, user_id: int = DEMO_USER_ID) -> UserSettings:
+    """Record that the experimental disclaimer was acknowledged now (Req 12.5)."""
+    return update_settings(disclaimer_ack_at=utc_now_iso(), user_id=user_id)
 
 
-# ---------------------------------------------------------------------------
-# providers
-# ---------------------------------------------------------------------------
-def _provider_from_row(row: sqlite3.Row) -> dict[str, Any]:
-    return {
-        "id": row["id"],
-        "kind": row["kind"],
-        "name": row["name"],
-        "specialty": row["specialty"],
-        "canHandleCardiacEmergency": bool(row["can_handle_cardiac_emergency"]),
-        "phone": row["phone"],
-        "address": row["address"],
-        "lat": row["lat"],
-        "lon": row["lon"],
-        "isSynthetic": bool(row["is_synthetic"]),
-    }
+# --------------------------------------------------------------------------- #
+# Providers (seeded directory)
+# --------------------------------------------------------------------------- #
 
-
-def insert_provider(conn: sqlite3.Connection, provider: dict[str, Any]) -> int:
-    """Insert one provider directory entry; return its new id."""
-    cur = conn.execute(
-        "INSERT INTO providers "
-        "(kind, name, specialty, can_handle_cardiac_emergency, phone, address, lat, lon, "
-        " is_synthetic, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (
-            provider["kind"],
-            provider["name"],
-            provider.get("specialty"),
-            int(provider.get("canHandleCardiacEmergency", False)),
-            provider.get("phone"),
-            provider.get("address"),
-            provider["lat"],
-            provider["lon"],
-            int(provider.get("isSynthetic", True)),
-            _now(),
-        ),
-    )
-    return int(cur.lastrowid)
-
-
-def list_providers(conn: sqlite3.Connection) -> list[dict[str, Any]]:
-    """Return every provider in the directory."""
-    rows = conn.execute("SELECT * FROM providers ORDER BY id").fetchall()
-    return [_provider_from_row(r) for r in rows]
-
-
-def get_provider(conn: sqlite3.Connection, provider_id: int) -> dict[str, Any] | None:
-    """Return a single provider by id, or ``None``."""
-    row = conn.execute("SELECT * FROM providers WHERE id = ?", (provider_id,)).fetchone()
-    return _provider_from_row(row) if row else None
-
-
-def count_providers(conn: sqlite3.Connection) -> int:
-    """Return the number of providers in the directory."""
-    return int(conn.execute("SELECT COUNT(*) AS n FROM providers").fetchone()["n"])
-
-
-# ---------------------------------------------------------------------------
-# care_profiles + emergency_contacts
-# ---------------------------------------------------------------------------
-def get_care_profile(conn: sqlite3.Connection, user_id: int = DEMO_USER_ID) -> dict[str, Any]:
-    """Return the care profile with its emergency contacts (empty shell if unset)."""
-    row = conn.execute(
-        "SELECT full_name, phone, default_lat, default_lon, preferred_provider_id "
-        "FROM care_profiles WHERE user_id = ?",
-        (user_id,),
-    ).fetchone()
-    contacts = list_emergency_contacts(conn, user_id)
-    if row is None:
-        return {
-            "fullName": None,
-            "phone": None,
-            "defaultLat": None,
-            "defaultLon": None,
-            "preferredProviderId": None,
-            "emergencyContacts": contacts,
-        }
-    return {
-        "fullName": row["full_name"],
-        "phone": row["phone"],
-        "defaultLat": row["default_lat"],
-        "defaultLon": row["default_lon"],
-        "preferredProviderId": row["preferred_provider_id"],
-        "emergencyContacts": contacts,
-    }
-
-
-def upsert_care_profile(
-    conn: sqlite3.Connection, profile: dict[str, Any], user_id: int = DEMO_USER_ID
-) -> dict[str, Any]:
-    """Create/replace the care profile and its emergency contacts; return the result.
-
-    ``emergencyContacts`` (if present) fully replaces the existing contact set so
-    the stored list always matches what the user submitted.
-    """
-    conn.execute(
-        "INSERT INTO care_profiles "
-        "(user_id, full_name, phone, default_lat, default_lon, preferred_provider_id, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?) "
-        "ON CONFLICT(user_id) DO UPDATE SET "
-        "  full_name = excluded.full_name, phone = excluded.phone, "
-        "  default_lat = excluded.default_lat, default_lon = excluded.default_lon, "
-        "  preferred_provider_id = excluded.preferred_provider_id, updated_at = excluded.updated_at",
-        (
-            user_id,
-            profile.get("fullName"),
-            profile.get("phone"),
-            profile.get("defaultLat"),
-            profile.get("defaultLon"),
-            profile.get("preferredProviderId"),
-            _now(),
-        ),
-    )
-    if "emergencyContacts" in profile:
-        replace_emergency_contacts(conn, profile["emergencyContacts"], user_id)
-    return get_care_profile(conn, user_id)
-
-
-def list_emergency_contacts(
-    conn: sqlite3.Connection, user_id: int = DEMO_USER_ID
-) -> list[dict[str, Any]]:
-    """Return the user's emergency contacts ordered by priority (1 = first)."""
-    rows = conn.execute(
-        "SELECT name, relationship, phone, priority FROM emergency_contacts "
-        "WHERE user_id = ? ORDER BY priority, id",
-        (user_id,),
-    ).fetchall()
-    return [
-        {
-            "name": r["name"],
-            "relationship": r["relationship"],
-            "phone": r["phone"],
-            "priority": r["priority"],
-        }
-        for r in rows
-    ]
-
-
-def replace_emergency_contacts(
-    conn: sqlite3.Connection, contacts: list[dict[str, Any]], user_id: int = DEMO_USER_ID
-) -> None:
-    """Replace all emergency contacts for the user with the provided list."""
-    conn.execute("DELETE FROM emergency_contacts WHERE user_id = ?", (user_id,))
-    for idx, c in enumerate(contacts, start=1):
-        conn.execute(
-            "INSERT INTO emergency_contacts (user_id, name, relationship, phone, priority, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+def insert_provider(p: Provider) -> int:
+    created = p.created_at or utc_now_iso()
+    with get_connection() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO providers
+                (kind, name, specialty, can_handle_cardiac_emergency, phone, address, lat, lon, is_synthetic, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
             (
-                user_id,
-                c["name"],
-                c.get("relationship"),
-                c["phone"],
-                c.get("priority", idx),
-                _now(),
+                p.kind,
+                p.name,
+                p.specialty,
+                1 if p.can_handle_cardiac_emergency else 0,
+                p.phone,
+                p.address,
+                p.lat,
+                p.lon,
+                1 if p.is_synthetic else 0,
+                created,
             ),
         )
+        conn.commit()
+        return int(cur.lastrowid)
 
 
-# ---------------------------------------------------------------------------
-# dispatch_events
-# ---------------------------------------------------------------------------
-def insert_dispatch_event(
-    conn: sqlite3.Connection, event: dict[str, Any], user_id: int = DEMO_USER_ID
-) -> int:
-    """Record a dispatch event (simulated or real); return its id (Req 11.6)."""
-    cur = conn.execute(
-        "INSERT INTO dispatch_events "
-        "(user_id, alert_id, recipient_provider_id, routing_reason, channel, status, payload, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (
-            user_id,
-            event.get("alertId"),
-            event.get("recipientProviderId"),
-            event["routingReason"],
-            event["channel"],
-            event["status"],
-            json.dumps(event["payload"]),
-            _now(),
-        ),
+def list_providers(*, kind: Optional[str] = None) -> list[Provider]:
+    sql = "SELECT * FROM providers"
+    params: list[object] = []
+    if kind is not None:
+        sql += " WHERE kind = ?"
+        params.append(kind)
+    sql += " ORDER BY name"
+    with get_connection() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [_row_to_provider(r) for r in rows]
+
+
+def get_provider(provider_id: int) -> Optional[Provider]:
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM providers WHERE id = ?", (provider_id,)).fetchone()
+    return _row_to_provider(row) if row else None
+
+
+def count_providers() -> int:
+    with get_connection() as conn:
+        row = conn.execute("SELECT COUNT(*) AS n FROM providers").fetchone()
+    return int(row["n"])
+
+
+# --------------------------------------------------------------------------- #
+# Care profile + emergency contacts
+# --------------------------------------------------------------------------- #
+
+def get_care_profile(*, user_id: int = DEMO_USER_ID) -> Optional[CareProfile]:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM care_profiles WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        profile = _row_to_care_profile(row)
+        contacts = conn.execute(
+            "SELECT * FROM emergency_contacts WHERE user_id = ? ORDER BY priority, id",
+            (user_id,),
+        ).fetchall()
+    profile.emergency_contacts = [_row_to_contact(c) for c in contacts]
+    return profile
+
+
+def upsert_care_profile(profile: CareProfile) -> CareProfile:
+    """Insert or update the single care profile for a user and replace its contacts."""
+    now = utc_now_iso()
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO care_profiles
+                (user_id, full_name, phone, default_lat, default_lon, preferred_provider_id, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                full_name = excluded.full_name,
+                phone = excluded.phone,
+                default_lat = excluded.default_lat,
+                default_lon = excluded.default_lon,
+                preferred_provider_id = excluded.preferred_provider_id,
+                updated_at = excluded.updated_at
+            """,
+            (
+                profile.user_id,
+                profile.full_name,
+                profile.phone,
+                profile.default_lat,
+                profile.default_lon,
+                profile.preferred_provider_id,
+                now,
+            ),
+        )
+        # Replace contacts wholesale (simplest consistent behavior for the MVP).
+        conn.execute("DELETE FROM emergency_contacts WHERE user_id = ?", (profile.user_id,))
+        for c in profile.emergency_contacts:
+            conn.execute(
+                """
+                INSERT INTO emergency_contacts (user_id, name, relationship, phone, priority, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (profile.user_id, c.name, c.relationship, c.phone, c.priority, c.created_at or now),
+            )
+        conn.commit()
+    result = get_care_profile(user_id=profile.user_id)
+    assert result is not None
+    return result
+
+
+# --------------------------------------------------------------------------- #
+# Dispatch events
+# --------------------------------------------------------------------------- #
+
+def insert_dispatch_event(e: DispatchEvent) -> int:
+    created = e.created_at or utc_now_iso()
+    with get_connection() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO dispatch_events
+                (user_id, alert_id, recipient_provider_id, routing_reason, channel, status, payload, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                e.user_id,
+                e.alert_id,
+                e.recipient_provider_id,
+                e.routing_reason,
+                e.channel,
+                e.status,
+                e.payload,
+                created,
+            ),
+        )
+        conn.commit()
+        return int(cur.lastrowid)
+
+
+def list_dispatch_events(*, user_id: int = DEMO_USER_ID, limit: Optional[int] = None) -> list[DispatchEvent]:
+    sql = "SELECT * FROM dispatch_events WHERE user_id = ? ORDER BY created_at DESC"
+    params: list[object] = [user_id]
+    if limit is not None:
+        sql += " LIMIT ?"
+        params.append(limit)
+    with get_connection() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [_row_to_dispatch(r) for r in rows]
+
+
+# --------------------------------------------------------------------------- #
+# Row -> dataclass mappers
+# --------------------------------------------------------------------------- #
+
+def _row_to_settings(r: sqlite3.Row) -> UserSettings:
+    return UserSettings(
+        user_id=r["user_id"],
+        warnings_enabled=bool(r["warnings_enabled"]),
+        suggestions_enabled=bool(r["suggestions_enabled"]),
+        emergency_enabled=bool(r["emergency_enabled"]),
+        disclaimer_ack_at=r["disclaimer_ack_at"],
+        updated_at=r["updated_at"],
     )
-    return int(cur.lastrowid)
 
 
-def list_dispatch_events(
-    conn: sqlite3.Connection, user_id: int = DEMO_USER_ID
-) -> list[dict[str, Any]]:
-    """Return the user's dispatch history, newest first (Req 11.7)."""
-    rows = conn.execute(
-        "SELECT id, alert_id, recipient_provider_id, routing_reason, channel, status, payload, created_at "
-        "FROM dispatch_events WHERE user_id = ? ORDER BY created_at DESC, id DESC",
-        (user_id,),
-    ).fetchall()
-    return [
-        {
-            "id": r["id"],
-            "alertId": r["alert_id"],
-            "recipientProviderId": r["recipient_provider_id"],
-            "routingReason": r["routing_reason"],
-            "channel": r["channel"],
-            "status": r["status"],
-            "payload": json.loads(r["payload"]),
-            "createdAt": r["created_at"],
-        }
-        for r in rows
-    ]
+def _row_to_provider(r: sqlite3.Row) -> Provider:
+    return Provider(
+        id=r["id"],
+        kind=r["kind"],
+        name=r["name"],
+        specialty=r["specialty"],
+        can_handle_cardiac_emergency=bool(r["can_handle_cardiac_emergency"]),
+        phone=r["phone"],
+        address=r["address"],
+        lat=r["lat"],
+        lon=r["lon"],
+        is_synthetic=bool(r["is_synthetic"]),
+        created_at=r["created_at"],
+    )
+
+
+def _row_to_care_profile(r: sqlite3.Row) -> CareProfile:
+    return CareProfile(
+        id=r["id"],
+        user_id=r["user_id"],
+        full_name=r["full_name"],
+        phone=r["phone"],
+        default_lat=r["default_lat"],
+        default_lon=r["default_lon"],
+        preferred_provider_id=r["preferred_provider_id"],
+        updated_at=r["updated_at"],
+    )
+
+
+def _row_to_contact(r: sqlite3.Row) -> EmergencyContact:
+    return EmergencyContact(
+        id=r["id"],
+        user_id=r["user_id"],
+        name=r["name"],
+        relationship=r["relationship"],
+        phone=r["phone"],
+        priority=r["priority"],
+        created_at=r["created_at"],
+    )
+
+
+def _row_to_dispatch(r: sqlite3.Row) -> DispatchEvent:
+    return DispatchEvent(
+        id=r["id"],
+        user_id=r["user_id"],
+        alert_id=r["alert_id"],
+        recipient_provider_id=r["recipient_provider_id"],
+        routing_reason=r["routing_reason"],
+        channel=r["channel"],
+        status=r["status"],
+        payload=r["payload"],
+        created_at=r["created_at"],
+    )

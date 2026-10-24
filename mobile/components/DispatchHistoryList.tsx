@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 
-import type { DispatchEvent } from "@/api/care";
+import { parseDispatchPayload, type DispatchEvent } from "@/api/care";
 import { SimulatedDispatchBadge } from "@/components/SimulatedDispatchBadge";
 import { theme } from "@/theme";
 
@@ -20,11 +20,13 @@ export function DispatchHistoryList({ events }: { events: DispatchEvent[] }) {
   }
   return (
     <View style={styles.list}>
-      {events.map((e) => (
+      {events.map((e) => {
+        const patientName = parseDispatchPayload(e.payload)?.patient.name;
+        return (
         <View key={e.id} style={styles.item}>
           <View style={styles.row}>
             <Text style={styles.recipient} numberOfLines={1}>
-              {e.payload.patient.name ? `For ${e.payload.patient.name}` : `Dispatch #${e.id}`}
+              {patientName ? `For ${patientName}` : `Dispatch #${e.id}`}
             </Text>
             <SimulatedDispatchBadge channel={e.channel} />
           </View>
@@ -32,7 +34,8 @@ export function DispatchHistoryList({ events }: { events: DispatchEvent[] }) {
           <Text style={styles.meta}>Routing: {REASON_LABEL[e.routingReason] ?? e.routingReason}</Text>
           <Text style={[styles.status, statusStyle(e.status)]}>Status: {e.status}</Text>
         </View>
-      ))}
+        );
+      })}
     </View>
   );
 }

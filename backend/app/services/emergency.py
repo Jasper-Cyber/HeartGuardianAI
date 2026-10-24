@@ -9,15 +9,21 @@ Implements the opt-in, human-in-the-loop emergency flow (Req 11):
 - ``build_payload`` assembles a non-diagnostic, experimental payload (Req 11.4, 11.9).
 - ``dispatch`` records every attempt; the default ``simulated`` channel contacts no
   one, and a ``real`` channel is blocked unless opted-in (Req 11.5–11.7).
+
+Builds on the Task 18 data layer (``care_repository`` + ``care_models``): the
+repository manages its own connections, so this service holds no connection handle.
+Decisions are plain dicts (JSON-serializable) so they round-trip to the client and
+back into ``dispatch``.
 """
 from __future__ import annotations
 
-import sqlite3
+import json
 from typing import Any
 
 from .. import emergency_config as cfg
 from ..adapters.notifier import NotifierAdapter, SimulatedNotifier
 from ..db import care_repository as repo
+from ..db.care_models import CareProfile, DispatchEvent, Provider
 from .provider import ProviderService
 
 
@@ -33,16 +39,27 @@ class EmergencyError(Exception):
         self.detail = detail
 
 
+def _provider_to_dict(p: Provider) -> dict[str, Any]:
+    """Serialize a Provider dataclass to the camelCase shape the client expects."""
+    return {
+        "id": p.id,
+        "kind": p.kind,
+        "name": p.name,
+        "specialty": p.specialty,
+        "canHandleCardiacEmergency": p.can_handle_cardiac_emergency,
+        "phone": p.phone,
+        "address": p.address,
+        "lat": p.lat,
+        "lon": p.lon,
+        "isSynthetic": p.is_synthetic,
+    }
+
+
 class EmergencyService:
     """Decides who to notify, builds the payload, and performs a gated dispatch."""
 
-    def __init__(
-        self,
-        conn: sqlite3.Connection,
-        notifier: NotifierAdapter | None = None,
-    ) -> None:
-        self._conn = conn
-        self._providers = ProviderService(conn)
+    def __init__(self, notifier: NotifierAdapter | None = None) -> None:
+        self._providers = ProviderService()
         self._notifier = notifier or SimulatedNotifier()
 
     # --- Routing ---------------------------------------------------------
@@ -60,13 +77,13 @@ class EmergencyService:
         not an emergency trigger (Req 11.1, 11.2). Raises :class:`EmergencyError`
         (``empty_directory``) when there is no provider to route to.
         """
-        settings = repo.get_settings(self._conn)
-        if not settings["emergency_enabled"]:
+        settings = repo.get_settings()
+        if not settings.emergency_enabled:
             return None
         if alert_state not in cfg.EMERGENCY_TRIGGER_STATES:
             return None
 
-        profile = repo.get_care_profile(self._conn)
+        profile = repo.get_care_profile()
         use_lat, use_lon, approx = self._resolve_location(profile, lat, lon, location_approximate)
 
         recipient, reason = self._route(profile, use_lat, use_lon)
@@ -85,7 +102,7 @@ class EmergencyService:
             approximate=approx,
         )
         return {
-            "recipient": recipient,
+            "recipient": _provider_to_dict(recipient),
             "routingReason": reason,
             "payload": payload,
             "channel": self._default_channel(),
@@ -93,7 +110,7 @@ class EmergencyService:
 
     def _resolve_location(
         self,
-        profile: dict[str, Any],
+        profile: CareProfile | None,
         lat: float | None,
         lon: float | None,
         approximate: bool,
@@ -101,17 +118,17 @@ class EmergencyService:
         """Use live coordinates when present, else fall back to the profile default (Req 10.6/10.8)."""
         if lat is not None and lon is not None:
             return lat, lon, approximate
-        if profile["defaultLat"] is not None and profile["defaultLon"] is not None:
-            return profile["defaultLat"], profile["defaultLon"], True
+        if profile is not None and profile.default_lat is not None and profile.default_lon is not None:
+            return profile.default_lat, profile.default_lon, True
         # Last-resort: no location at all. ProviderService still ranks by distance
         # from (0,0); the payload flags the location as approximate/unknown.
         return 0.0, 0.0, True
 
     def _route(
-        self, profile: dict[str, Any], lat: float, lon: float
-    ) -> tuple[dict[str, Any] | None, str]:
+        self, profile: CareProfile | None, lat: float, lon: float
+    ) -> tuple[Provider | None, str]:
         """Apply the transparent routing rule (Req 11.3). Returns (recipient, reason)."""
-        preferred_id = profile.get("preferredProviderId")
+        preferred_id = profile.preferred_provider_id if profile else None
         ranked = self._providers.suggest(lat, lon, emergency=True, preferred_id=preferred_id)
         if not ranked:
             return None, cfg.REASON_NEAREST_CAPABLE
@@ -119,24 +136,24 @@ class EmergencyService:
         # Rule 1: preferred doctor, if present and within reach.
         if preferred_id is not None:
             for s in ranked:
-                if s["provider"]["id"] == preferred_id and s["distanceKm"] <= cfg.MAX_REACHABLE_KM:
-                    return s["provider"], cfg.REASON_PREFERRED_REACHABLE
+                if s.provider.id == preferred_id and s.distance_km <= cfg.MAX_REACHABLE_KM:
+                    return s.provider, cfg.REASON_PREFERRED_REACHABLE
 
         # Rule 2: nearest cardiac-capable provider (ranked list already puts capable
         # providers first, then nearest).
         for s in ranked:
-            if s["provider"]["canHandleCardiacEmergency"]:
-                return s["provider"], cfg.REASON_NEAREST_CAPABLE
+            if s.provider.can_handle_cardiac_emergency:
+                return s.provider, cfg.REASON_NEAREST_CAPABLE
 
         # No capable provider exists; fall back to the single nearest provider so the
         # flow still surfaces someone, with the nearest-capable reason for auditing.
-        return ranked[0]["provider"], cfg.REASON_NEAREST_CAPABLE
+        return ranked[0].provider, cfg.REASON_NEAREST_CAPABLE
 
     # --- Payload ---------------------------------------------------------
     def build_payload(
         self,
         *,
-        profile: dict[str, Any],
+        profile: CareProfile | None,
         alert_state: str,
         lat: float,
         lon: float,
@@ -147,15 +164,31 @@ class EmergencyService:
             cfg.FINDING_SUMMARY_PREFIX
             + f"an '{alert_state}' level pattern was observed in the user's synthetic monitoring data."
         )
+        contacts = (
+            [
+                {
+                    "name": c.name,
+                    "relationship": c.relationship,
+                    "phone": c.phone,
+                    "priority": c.priority,
+                }
+                for c in profile.emergency_contacts
+            ]
+            if profile
+            else []
+        )
         return {
-            "patient": {"name": profile.get("fullName"), "phone": profile.get("phone")},
+            "patient": {
+                "name": profile.full_name if profile else None,
+                "phone": profile.phone if profile else None,
+            },
             "location": {
                 "lat": lat,
                 "lon": lon,
                 "approximate": approximate,
                 "description": None,
             },
-            "emergencyContacts": profile.get("emergencyContacts", []),
+            "emergencyContacts": contacts,
             "findingSummary": summary,
             "isExperimental": True,
         }
@@ -179,18 +212,18 @@ class EmergencyService:
         """
         channel = channel or self._default_channel()
         recipient = decision["recipient"]
+        payload_json = json.dumps(decision["payload"])
 
         if not confirmed:
             event_id = repo.insert_dispatch_event(
-                self._conn,
-                {
-                    "alertId": alert_id,
-                    "recipientProviderId": recipient["id"],
-                    "routingReason": decision["routingReason"],
-                    "channel": channel,
-                    "status": "pending_confirm",
-                    "payload": decision["payload"],
-                },
+                DispatchEvent(
+                    alert_id=alert_id,
+                    recipient_provider_id=recipient.get("id"),
+                    routing_reason=decision["routingReason"],
+                    channel=channel,
+                    status="pending_confirm",
+                    payload=payload_json,
+                )
             )
             return {
                 "id": event_id,
@@ -209,15 +242,14 @@ class EmergencyService:
 
         result = self._notifier.send(recipient, decision["payload"])
         event_id = repo.insert_dispatch_event(
-            self._conn,
-            {
-                "alertId": alert_id,
-                "recipientProviderId": recipient["id"],
-                "routingReason": decision["routingReason"],
-                "channel": channel,
-                "status": result.status,
-                "payload": decision["payload"],
-            },
+            DispatchEvent(
+                alert_id=alert_id,
+                recipient_provider_id=recipient.get("id"),
+                routing_reason=decision["routingReason"],
+                channel=channel,
+                status=result.status,
+                payload=payload_json,
+            )
         )
         return {
             "id": event_id,
