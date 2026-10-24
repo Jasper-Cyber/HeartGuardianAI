@@ -264,6 +264,8 @@ export interface Settings {
 
 /** Structured error body returned by the backend exception handlers. */
 export interface ApiErrorBody {
-  error: string;
+  /** FastAPI's default error shape is `{ detail }`; this is the primary message. */
   detail?: string;
+  /** Some custom handlers may also send `error`; kept optional as a fallback. */
+  error?: string;
 }

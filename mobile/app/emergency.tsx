@@ -62,8 +62,15 @@ export default function EmergencyScreen() {
   }, [enabled, location.resolved, findingSummary]);
 
   const onConfirm = () => {
+    // Dispatch with the SAME coordinates the decision was evaluated against, so
+    // the backend re-resolves to the exact recipient that was previewed and
+    // confirmed (avoids a confirm-vs-dispatch split-brain and never sends null
+    // when evaluation used the profile default). Fall back to live location only
+    // if the decision payload somehow lacks coordinates.
+    const decidedLat = decision?.payload?.location?.lat ?? location.lat;
+    const decidedLon = decision?.payload?.location?.lon ?? location.lon;
     dispatch.mutate(
-      { lat: location.lat, lon: location.lon, findingSummary, confirmed: true },
+      { lat: decidedLat, lon: decidedLon, findingSummary, confirmed: true },
       {
         onSuccess: (res) => {
           setLastResult(

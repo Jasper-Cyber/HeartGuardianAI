@@ -191,6 +191,28 @@ are never blocked waiting on the backend.
   types and the `evaluate`/`dispatch` client+hook signatures to match the real backend. Verified:
   `tsc --noEmit` clean and all 33 mobile Jest tests pass (incl. Helenawai's client/trends suites).
 
+- **[RESOLVED] Mobile client read the wrong error-body field — all backend error messages were lost (maiabrunne).**
+  `mobile/api/client.ts` built its `ApiError` message from `errBody.error`, and `ApiErrorBody`
+  declared a required `error: string`. But the backend raises plain `HTTPException(detail=...)` with
+  no custom handler, so FastAPI serializes errors as `{"detail": "..."}`. `error` was therefore
+  always `undefined`, and every surfaced error fell back to a generic "Request failed with <status>"
+  — the specific reasons (e.g. "Emergency response is not enabled.", "Dispatch requires explicit
+  user confirmation.", "Real dispatch is disabled…") never reached the UI (notably `emergency.tsx`'s
+  dispatch error handler). Fix: `ApiErrorBody` now has `detail?` (primary) + optional `error?`, and
+  the client reads `detail` (string) first, then `error`, then the generic fallback. Verified against
+  the running backend (a disabled-dispatch 409 now surfaces "Emergency response is not enabled.").
+
+- **[RESOLVED] Emergency dispatch confirm-vs-dispatch split-brain / null coordinates (maiabrunne).**
+  `emergency.tsx` evaluated a decision (server resolves location + routing, previewed in the confirm
+  dialog), but on dispatch re-sent the live `useUserLocation` `lat`/`lon`. Those could be `null` (GPS
+  denied, falling back to an approximate/empty location) or could re-resolve to a DIFFERENT recipient
+  than the one previewed/confirmed, since `/dispatch` independently re-evaluates routing server-side.
+  Result: dispatch could 409/422 after a successful preview, or notify a recipient other than the one
+  the user confirmed. Fix: dispatch now reuses the coordinates the decision was evaluated against
+  (`decision.payload.location.{lat,lon}`), falling back to live location only if absent — so the
+  server re-resolves to the same recipient and never receives null when evaluation used a default
+  location. Verified: `tsc --noEmit` clean, 33/33 mobile tests pass.
+
 - **[RESOLVED] Four routers imported but never registered in `main.py` (maiabrunne).** A later merge
   mangled the router-registration block in `backend/app/main.py`: it `import`s
   `analysis, emergency, insights, measurements, providers, settings, simulator`, but only calls
