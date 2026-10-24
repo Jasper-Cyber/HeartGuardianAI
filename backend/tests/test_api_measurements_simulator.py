@@ -77,14 +77,13 @@ def test_scenario_invalid_422(client):
 
 def test_simulator_start_pause_reset(client):
     c, repo = client
-    from app.db.models import Measurement
 
+    # Start now generates a batch of synthetic readings via the SimulatorService seam.
     assert c.post("/simulator/start").json()["status"] == "running"
+    assert repo.count_measurements() > 0
     assert c.post("/simulator/pause").json()["status"] == "paused"
 
-    # Reset clears generated readings.
-    repo.insert_measurement(Measurement(timestamp="2026-01-01T00:00:00+00:00", metric_type="hr", value=70.0))
-    assert repo.count_measurements() == 1
+    # Reset clears ALL generated readings.
     state = c.post("/simulator/reset").json()
     assert state["status"] == "paused"
     assert state["cursorTs"] is None
