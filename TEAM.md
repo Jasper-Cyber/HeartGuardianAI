@@ -213,6 +213,27 @@ are never blocked waiting on the backend.
   server re-resolves to the same recipient and never receives null when evaluation used a default
   location. Verified: `tsc --noEmit` clean, 33/33 mobile tests pass.
 
+- **[RESOLVED] DB connection leak across the repository layer (maiabrunne).** `db/connection.py`
+  `get_connection()` returned a bare `sqlite3.Connection`, and every repo function used it as
+  `with get_connection() as conn:`. A `sqlite3.Connection` context manager only commits/rolls back —
+  it does NOT close — so every call leaked a connection (verified: the connection was still usable
+  after the `with` block). Under load (`/trends` loops metrics; `update_sim_state` opens a second
+  connection) this accumulates open file handles. Fix: `get_connection()` is now a `@contextmanager`
+  that yields the connection and closes it in `finally` (rolling back on exception); a raw `_connect()`
+  helper backs `init_db`/`reset_db`. Mutating callers already commit explicitly, so behavior is
+  unchanged. Verified: connection is closed after the block; all 16 repository tests still pass.
+
+- **[RESOLVED] `query_measurements(limit=…)` returned the OLDEST rows, not the newest (maiabrunne).**
+  The query sorted `ORDER BY timestamp ASC` then applied `LIMIT`, so a limited query returned the
+  oldest N readings (verified: `limit=2` returned 00:00/01:00). A dashboard/history view wants the
+  most recent N. Fix: when `limit` is given, select the newest N (`ORDER BY timestamp DESC … LIMIT`)
+  then re-order ascending for display; unlimited queries remain fully ascending so the analysis
+  detectors/trends that depend on ASC order are unaffected. Added an `id` tiebreaker to make ties
+  deterministic. Verified: `limit=2` now returns the newest two (03:00/04:00) ascending; unlimited
+  order unchanged; repository tests pass.
+  NOTE: the mobile client's `getMeasurements` still never sends `limit`, so it currently fetches the
+  full table — a follow-up could add a client-side cap (unclaimed; left for whoever owns that call).
+
 - **[RESOLVED] Four routers imported but never registered in `main.py` (maiabrunne).** A later merge
   mangled the router-registration block in `backend/app/main.py`: it `import`s
   `analysis, emergency, insights, measurements, providers, settings, simulator`, but only calls
