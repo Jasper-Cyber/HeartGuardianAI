@@ -46,22 +46,29 @@ export interface MeasurementsResponse {
   items: Reading[];
 }
 
-/** A single aggregated point on a trend series. */
+/**
+ * A single aggregated point on a trend series, as returned by GET /trends.
+ * The backend aggregates per period and reports mean/min/max/count; `period`
+ * is the bucket label (e.g. a date string).
+ */
 export interface TrendPoint {
-  timestamp: string;
-  value: number | null;
+  period: string;
+  mean: number | null;
+  min: number | null;
+  max: number | null;
+  count: number;
 }
 
-/** One metric's trend series plus its baseline band, for the History screen. */
+/** One metric's trend series plus its baseline mean, for the History screen. */
 export interface TrendSeries {
-  metricType: MetricType;
-  points: TrendPoint[];
+  metric: MetricType;
   baselineMean: number | null;
-  baselineStd: number | null;
+  points: TrendPoint[];
 }
 
 export interface TrendsResponse {
   range: TrendRange;
+  isExperimental: boolean;
   series: TrendSeries[];
 }
 
@@ -69,21 +76,47 @@ export interface TrendsResponse {
 // Alerts / insights
 // ---------------------------------------------------------------------------
 
-export interface Alert {
+/** A supporting anomaly finding attached to an insight. */
+export interface Finding {
   id?: number;
+  metricType: MetricType;
+  findingType: string;
+  severityBand: string;
+  windowStart: string;
+  windowEnd: string;
+  deviation: number | null;
+  supporting: unknown;
+  createdAt?: string;
+}
+
+/**
+ * GET /insights returns a FLAT object (the current insight), not a wrapper.
+ * This mirrors the backend `InsightResponse` exactly.
+ */
+export interface InsightResponse {
   state: AlertState;
   title: string;
   explanation: string;
   nextSteps: string;
-  isExperimental: true;
   emergencyGuidance: string;
-  createdAt?: string;
+  experimentalLabel: string;
+  isExperimental: boolean;
+  findingIds: number[];
+  findings: Finding[];
 }
 
-/** Response of GET /insights: the current alert plus recent history. */
-export interface InsightsResponse {
-  current: Alert;
-  history: Alert[];
+/** Summary returned by POST /analysis/run. */
+export interface RunAnalysisResponse {
+  findingsCount: number;
+  alertState: AlertState;
+  isExperimental: boolean;
+}
+
+/** A compact alert row for the History past-alerts list. */
+export interface AlertSummary {
+  state: AlertState;
+  title: string;
+  createdAt?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -112,13 +145,20 @@ export interface Provider {
   address?: string;
   lat: number;
   lon: number;
-  isSynthetic: true;
+  isSynthetic: boolean;
 }
 
 export interface ProviderSuggestion {
   provider: Provider;
   distanceKm: number;
   isPreferred: boolean;
+}
+
+/** Envelope returned by GET /providers. */
+export interface ProvidersResponse {
+  count: number;
+  isExperimental: boolean;
+  items: ProviderSuggestion[];
 }
 
 export interface EmergencyContact {

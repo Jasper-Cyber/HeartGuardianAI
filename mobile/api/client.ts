@@ -18,10 +18,12 @@ import type {
   DispatchChannel,
   DispatchEvent,
   EmergencyDecision,
-  InsightsResponse,
+  InsightResponse,
   MeasurementsResponse,
-  Provider,
+  ProviderSuggestion,
+  ProvidersResponse,
   Reading,
+  RunAnalysisResponse,
   Scenario,
   ScenarioState,
   Settings,
@@ -158,10 +160,11 @@ export const api = {
   getTrends: (range: TrendRange, signal?: AbortSignal) =>
     request<TrendsResponse>("/trends", { query: { range }, signal }),
 
-  // Analysis & insights
-  runAnalysis: () => request<InsightsResponse>("/analysis/run", { method: "POST" }),
+  // Analysis & insights.
+  // GET /insights returns a flat insight object (no current/history wrapper).
+  runAnalysis: () => request<RunAnalysisResponse>("/analysis/run", { method: "POST" }),
 
-  getInsights: (signal?: AbortSignal) => request<InsightsResponse>("/insights", { signal }),
+  getInsights: (signal?: AbortSignal) => request<InsightResponse>("/insights", { signal }),
 
   // Simulator / scenario
   getScenario: (signal?: AbortSignal) => request<ScenarioState>("/scenario", { signal }),
@@ -179,11 +182,15 @@ export const api = {
   updateCareProfile: (profile: CareProfile) =>
     request<CareProfile>("/care/profile", { method: "PUT", body: profile }),
 
-  // Providers (care/emergency consumers)
-  getProviders: (
+  // Providers (care/emergency consumers). Backend wraps suggestions in an
+  // envelope ({ count, isExperimental, items }); unwrap to the suggestions list.
+  getProviders: async (
     params: { lat: number; lon: number; emergency?: boolean },
     signal?: AbortSignal,
-  ) => request<Provider[]>("/providers", { query: params, signal }),
+  ): Promise<ProviderSuggestion[]> => {
+    const res = await request<ProvidersResponse>("/providers", { query: params, signal });
+    return res.items;
+  },
 
   // Emergency
   evaluateEmergency: (body: { lat: number; lon: number }) =>

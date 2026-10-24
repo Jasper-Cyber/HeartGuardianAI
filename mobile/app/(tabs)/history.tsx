@@ -23,7 +23,19 @@ export default function HistoryScreen() {
   const insights = useInsights();
 
   const series = trends.data?.series ?? [];
-  const pastAlerts = insights.data?.history ?? [];
+  // The backend currently exposes only the current insight (no past-alerts
+  // history endpoint yet), so there is no alert history to show. If the
+  // current insight is non-normal, surface it as the single recent entry.
+  const pastAlerts =
+    insights.data && insights.data.state !== "normal"
+      ? [
+          {
+            state: insights.data.state,
+            title: insights.data.title,
+            createdAt: undefined,
+          },
+        ]
+      : [];
   const isLoading = trends.isLoading && !trends.data;
   const isEmpty = !isLoading && !trends.isError && series.length === 0;
 
@@ -54,7 +66,7 @@ export default function HistoryScreen() {
             <Text style={styles.muted}>Try another range, or run the simulator to generate history.</Text>
           </View>
         ) : (
-          series.map((s) => <TrendChart key={s.metricType} series={s} />)
+          series.map((s) => <TrendChart key={s.metric} series={s} />)
         )}
 
         <Text style={styles.sectionLabel}>Past alerts</Text>

@@ -30,8 +30,8 @@ export default function DashboardScreen() {
   const scenario = useScenario();
 
   const readings = measurements.data;
-  const alertState: AlertState = insights.data?.current.state ?? "normal";
-  const monitoringTitle = insights.data?.current.title;
+  const alertState: AlertState = insights.data?.state ?? "normal";
+  const monitoringTitle = insights.data?.title;
   const simRunning = scenario.data?.status === "running";
 
   const isLoading = measurements.isLoading && !readings;
