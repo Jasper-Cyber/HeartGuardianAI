@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -35,16 +37,35 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def get_connection() -> sqlite3.Connection:
-    """Open a SQLite connection with sane defaults for this app.
-
-    - ``row_factory`` set to ``sqlite3.Row`` so rows behave like dicts.
-    - Foreign keys enforced.
-    """
+def _connect() -> sqlite3.Connection:
+    """Open a configured raw SQLite connection (caller must close it)."""
     conn = sqlite3.connect(_db_path())
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
     return conn
+
+
+@contextmanager
+def get_connection() -> Iterator[sqlite3.Connection]:
+    """Yield a SQLite connection and ALWAYS close it on exit.
+
+    - ``row_factory`` is :class:`sqlite3.Row` so rows behave like dicts.
+    - Foreign keys are enforced.
+    - The connection is CLOSED when the ``with`` block exits. (A bare
+      ``sqlite3.Connection`` used as a context manager only commits/rolls back
+      and does NOT close, which previously leaked a connection on every call.)
+
+    Mutating callers still call ``conn.commit()`` explicitly; reads need no commit.
+    On an exception the transaction is rolled back before the connection closes.
+    """
+    conn = _connect()
+    try:
+        yield conn
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def init_db() -> None:

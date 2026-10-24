@@ -85,7 +85,13 @@ def query_measurements(
 ) -> list[Measurement]:
     """Query readings, optionally filtered by metric and time range (inclusive).
 
-    Results are ordered by timestamp ascending.
+    Results are returned in ascending timestamp order (with ``id`` as a stable
+    tiebreaker for readings that share a timestamp).
+
+    When ``limit`` is given, the MOST RECENT ``limit`` readings are returned
+    (still in ascending order for display). Previously the query applied
+    ``LIMIT`` after an ascending sort, which returned the OLDEST ``limit`` rows —
+    the opposite of what a dashboard/history view wants.
     """
     clauses = ["user_id = ?"]
     params: list[object] = [user_id]
@@ -98,10 +104,18 @@ def query_measurements(
     if end is not None:
         clauses.append("timestamp <= ?")
         params.append(end)
+    where = " AND ".join(clauses)
 
-    sql = f"SELECT * FROM measurements WHERE {' AND '.join(clauses)} ORDER BY timestamp ASC"
-    if limit is not None:
-        sql += " LIMIT ?"
+    if limit is None:
+        sql = f"SELECT * FROM measurements WHERE {where} ORDER BY timestamp ASC, id ASC"
+    else:
+        # Take the newest `limit` rows (DESC + LIMIT), then re-order ascending so
+        # the returned slice is the MOST RECENT window in chronological order.
+        sql = (
+            f"SELECT * FROM (SELECT * FROM measurements WHERE {where} "
+            f"ORDER BY timestamp DESC, id DESC LIMIT ?) "
+            f"ORDER BY timestamp ASC, id ASC"
+        )
         params.append(limit)
 
     with get_connection() as conn:
