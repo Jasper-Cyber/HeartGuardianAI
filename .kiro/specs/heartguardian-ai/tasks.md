@@ -96,7 +96,7 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
 
 ## Phase 6 — Care network & emergency response
 
-- [ ] 18. Care profile + contacts + settings data layer (backend) — _Owner: maiabrunne_
+- [x] 18. Care profile + contacts + settings data layer (backend) — _Owner: maiabrunne_
   - Add `user_settings`, `care_profiles`, `emergency_contacts`, `providers`, `dispatch_events` tables + repository functions.
   - Seed a synthetic provider directory (doctors + hospitals with lat/lon + capability flags).
   - Feature flags default: suggestions OFF, emergency OFF; expose `GET/PUT /settings`.
