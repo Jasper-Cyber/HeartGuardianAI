@@ -315,3 +315,46 @@ def build_alert(
         alert.id = repo.insert_alert(alert)
 
     return InsightResult(alert=alert, findings=findings)
+
+
+# --------------------------------------------------------------------------- #
+# Class wrapper (Task 11 seam).
+#
+# BUGFIX (maiabrunne): ``routers/analysis.py`` (Task 11) imports and instantiates
+# ``AlertService`` and calls ``evaluate_and_store(run_analysis=True)``, but this
+# module historically exposed only the function API above (``build_alert`` et al.,
+# used by ``routers/insights.py``). Two parallel PRs merged with mismatched shapes,
+# which broke every import of ``app.main``. This thin class reconciles them WITHOUT
+# changing the working function API: it optionally triggers a recompute, then builds
+# and persists the alert via ``build_alert``.
+# --------------------------------------------------------------------------- #
+class AlertService:
+    """Object-oriented facade over the alert functions in this module.
+
+    Exists so ``POST /analysis/run`` can recompute analysis and refresh the stored
+    alert in one call. Delegates to the pure functions above; the function API
+    remains the canonical implementation.
+    """
+
+    def evaluate_and_store(
+        self,
+        *,
+        run_analysis: bool = False,
+        user_id: int = DEMO_USER_ID,
+    ) -> Alert:
+        """Optionally recompute findings, then build + persist the current alert.
+
+        When ``run_analysis`` is True, the analysis engine recomputes and persists
+        findings first (Task 11 ``POST /analysis/run`` behavior); the alert is then
+        built from whatever findings are now stored. Returns the persisted ``Alert``
+        (``alert.state`` is what the router reports).
+        """
+        if run_analysis:
+            # Imported lazily to avoid a circular import at module load
+            # (analysis imports nothing from alerts, but keep the seam one-directional).
+            from . import analysis
+
+            analysis.run_analysis(user_id=user_id)
+
+        result = build_alert(user_id=user_id, persist=True)
+        return result.alert

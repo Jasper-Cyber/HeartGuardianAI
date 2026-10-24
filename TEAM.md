@@ -134,6 +134,25 @@ are never blocked waiting on the backend.
 > `mobile/` exist and run. All four members can start their first task now (see "First task per
 > person" in Getting Started below).
 
+## Known issues / in-progress fixes
+
+- **Backend import chain broken on `main` (being fixed by maiabrunne).** After several
+  parallel PRs merged, `main` could not even import `app.main` (every test errored at
+  collection), because `routers/analysis.py` referenced names its dependencies didn't export:
+  - `services/alerts.py` exposed only a function API but `routers/analysis.py` imported an
+    `AlertService` class — fixed by adding a thin `AlertService` wrapper over the existing
+    functions (function API unchanged).
+  - `services/analysis.py` defined `_BASELINE_METRICS` but `routers/analysis.py` imported
+    `NUMERIC_METRICS` — fixed by exposing a public `NUMERIC_METRICS` alias (no logic change).
+
+  This restores the backend to importable/runnable (0 → 116 passing tests).
+
+- **Remaining ~41 test failures are pre-existing on `main`** and span several owners' modules
+  (analysis engine, alerts, sensor adapter, provider, settings, emergency, measurements). They
+  are API/shape mismatches from parallel merges and need each module's **owner** to reconcile
+  intended behavior — they are out of scope for the import fix above. Owners: please check your
+  module's failing tests.
+
 ## Git workflow (one branch per task)
 
 Never commit directly to `main`.
