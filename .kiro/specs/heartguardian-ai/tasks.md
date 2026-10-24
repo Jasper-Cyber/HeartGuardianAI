@@ -107,7 +107,7 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
   - `GET/PUT /care/profile`, `GET /providers?lat&lon&emergency`.
   - _Requirements: 10.4, 10.5, 10.6, 10.7_
 
-- [ ] 20. EmergencyService + NotifierAdapter + endpoints — _Owner: maiabrunne_
+- [x] 20. EmergencyService + NotifierAdapter + endpoints — _Owner: maiabrunne_
   - Respect `emergency_enabled` flag (off => no dispatch path). Routing rule (preferred-reachable vs nearest-capable) in `emergency_config.py`; payload assembly; `SimulatedNotifier`.
   - Future interface-only `SmsNotifierAdapter`/`VoiceCallNotifierAdapter` stubs.
   - `POST /emergency/evaluate`, `POST /emergency/dispatch` (simulated default, requires confirm; real gated by opt-in flag), `GET /emergency/history`.
