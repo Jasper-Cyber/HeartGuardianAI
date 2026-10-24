@@ -141,6 +141,52 @@ class SimulatorService:
             raise ValueError("scenario must be one of A, B, C")
         return repo.update_sim_state(scenario=scenario)
 
+    # Fixed anchor for the count-based generate() API: makes output depend only on
+    # (scenario, seed, steps), never on wall-clock time, so it is reproducible.
+    _EPOCH_ANCHOR = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+    def generate(
+        self,
+        *,
+        steps: int,
+        scenario=None,
+        seed=None,
+        persist: bool = True,
+    ) -> "list[Measurement]":
+        """Generate ``steps`` hourly ticks of synthetic readings (compatibility API).
+
+        Public batch-generation entry point used by the scenario/simulator router
+        seam, the seed script, and tests. Thin deterministic wrapper over the
+        internal ``_generate_batch``: callers request a fixed number of ticks
+        without managing cursor_ts. ``scenario``/``seed`` default to the persisted
+        sim_state when omitted (and are persisted when provided). Output depends
+        only on (scenario, seed, steps) via a fixed epoch anchor (Req 2.8). With
+        ``persist=True`` rows are written and the session marked running; with
+        ``persist=False`` nothing is written. Returns the generated Measurement rows.
+        """
+        state = repo.get_sim_state()
+        scenario = scenario or state.scenario
+        seed = state.seed if seed is None else seed
+        if persist and (scenario != state.scenario or seed != state.seed):
+            repo.update_sim_state(scenario=scenario, seed=seed)
+
+        start_ts = self._floor_to_tick(self._EPOCH_ANCHOR)
+        until = start_ts + max(0, int(steps)) * TICK
+        rows, next_cursor = self._generate_batch(
+            scenario=scenario,
+            seed=seed,
+            start_ts=start_ts,
+            until=until,
+            run_anchor_index=self._tick_index(start_ts),
+        )
+        if persist and rows:
+            repo.insert_measurements(rows)
+            repo.update_sim_state(
+                status="running",
+                cursor_ts=(next_cursor.isoformat() if next_cursor else None),
+            )
+        return rows
+
     def start(self) -> SimState:
         """Mark the session running and generate a batch of readings up to now.
 
