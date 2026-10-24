@@ -153,7 +153,7 @@ are never blocked waiting on the backend.
   intended behavior — they are out of scope for the import fix above. Owners: please check your
   module's failing tests.
 
-- **Mobile API client ↔ backend response-shape mismatches (owner: Helenawai, fix in progress).**
+- **[RESOLVED] Mobile API client ↔ backend response-shape mismatches (owner: Helenawai).**
   The mobile `api/` layer (Task 13) was written before several endpoints existed and assumed
   shapes that differ from what the backend actually returns. Backend verified to import/run; these
   are client-side contract bugs that would break mobile screens at runtime even with the backend up:
@@ -169,9 +169,12 @@ are never blocked waiting on the backend.
     the History screen's "past alerts" has no data source — needs a backend decision (add endpoint or
     drop the section).
 
-  Resolution: adapt the **mobile client** to the backend's actual shapes (lower-risk than changing
-  three built+tested endpoints). Tracked on branch `fix/mobile-api-contracts`. The missing
-  past-alerts endpoint is a separate backend-owner decision.
+  Resolution (done, branch `fix/mobile-api-contracts`): the **mobile client** was adapted to the
+  backend's actual shapes — `/insights` read as a flat object, `/trends` series/point field names
+  (`metric`, `period`/`mean`), and `/providers` envelope unwrapped to `ProviderSuggestion[]`. All
+  shapes verified against the running backend. The missing past-alerts history endpoint remains a
+  separate backend-owner decision; for now the History screen derives a single recent entry from
+  the current non-normal insight.
 
 - **Four routers imported but never registered in `main.py` (maiabrunne — fix in progress).** A later merge
   mangled the router-registration block in `backend/app/main.py`: it `import`s

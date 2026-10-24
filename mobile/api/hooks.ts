@@ -21,9 +21,10 @@ import type {
   DispatchChannel,
   DispatchEvent,
   EmergencyDecision,
-  InsightsResponse,
-  Provider,
+  InsightResponse,
+  ProviderSuggestion,
   Reading,
+  RunAnalysisResponse,
   Scenario,
   ScenarioState,
   Settings,
@@ -90,7 +91,7 @@ export function useTrends(range: TrendRange): UseQueryResult<TrendsResponse> {
   });
 }
 
-export function useInsights(): UseQueryResult<InsightsResponse> {
+export function useInsights(): UseQueryResult<InsightResponse> {
   const pollInterval = useLivePollInterval();
   return useQuery({
     queryKey: queryKeys.insights,
@@ -109,7 +110,7 @@ export function useCareProfile(): UseQueryResult<CareProfile> {
 export function useProviders(
   params: { lat: number; lon: number; emergency?: boolean },
   options: { enabled?: boolean } = {},
-): UseQueryResult<Provider[]> {
+): UseQueryResult<ProviderSuggestion[]> {
   return useQuery({
     queryKey: queryKeys.providers(params),
     queryFn: ({ signal }) => api.getProviders(params, signal),
@@ -168,12 +169,14 @@ export function useSimulatorControl(): UseMutationResult<ScenarioState, unknown,
 }
 
 /** Recompute baselines + findings, then refresh insights/trends. */
-export function useRunAnalysis(): UseMutationResult<InsightsResponse, unknown, void> {
+export function useRunAnalysis(): UseMutationResult<RunAnalysisResponse, unknown, void> {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => api.runAnalysis(),
-    onSuccess: (insights) => {
-      qc.setQueryData(queryKeys.insights, insights);
+    // /analysis/run returns a summary, not the full insight — refetch insights
+    // and trends so screens pick up the recomputed state.
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.insights });
       void qc.invalidateQueries({ queryKey: ["trends"] });
     },
   });

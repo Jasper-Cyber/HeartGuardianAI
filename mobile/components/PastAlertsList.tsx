@@ -1,11 +1,11 @@
 import { StyleSheet, Text, View } from "react-native";
 
-import type { Alert } from "@/api/types";
+import type { AlertSummary } from "@/api/types";
 import { alertStateMeta } from "@/utils/alerts";
 import { theme } from "@/theme";
 
 interface PastAlertsListProps {
-  alerts: Alert[];
+  alerts: AlertSummary[];
 }
 
 /** Compact list of past alerts for the History screen (Req 5.3). */
@@ -19,7 +19,7 @@ export function PastAlertsList({ alerts }: PastAlertsListProps) {
       {alerts.map((a, i) => {
         const meta = alertStateMeta(a.state);
         return (
-          <View key={a.id ?? i} style={styles.row}>
+          <View key={i} style={styles.row}>
             <View style={[styles.dot, { backgroundColor: meta.color }]} />
             <View style={styles.rowText}>
               <Text style={styles.title}>{a.title || meta.defaultTitle}</Text>

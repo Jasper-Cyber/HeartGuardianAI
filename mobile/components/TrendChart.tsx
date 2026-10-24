@@ -8,8 +8,8 @@ import { theme } from "@/theme";
 
 interface TrendChartProps {
   series: TrendSeries;
-  /** Timestamps flagged as anomalies, to emphasize on the line (Req 5.3). */
-  anomalyTimestamps?: Set<string>;
+  /** Period labels flagged as anomalies, to emphasize on the line (Req 5.3). */
+  anomalyPeriods?: Set<string>;
 }
 
 /**
@@ -17,8 +17,8 @@ interface TrendChartProps {
  * and anomaly markers (Req 5.2, 5.3). Shows an explicit empty state when the
  * series has no usable data (Req 5.5).
  */
-export function TrendChart({ series, anomalyTimestamps }: TrendChartProps) {
-  const meta = METRIC_META[series.metricType];
+export function TrendChart({ series, anomalyPeriods }: TrendChartProps) {
+  const meta = METRIC_META[series.metric];
   const accent = theme.colors[meta.colorKey];
 
   if (!seriesHasData(series)) {
@@ -30,7 +30,7 @@ export function TrendChart({ series, anomalyTimestamps }: TrendChartProps) {
     );
   }
 
-  const data = toTrendChartData(series.points, { labelEvery: 4, anomalyTimestamps }).map((p) =>
+  const data = toTrendChartData(series.points, { labelEvery: 4, anomalyPeriods }).map((p) =>
     p.anomaly
       ? {
           ...p,

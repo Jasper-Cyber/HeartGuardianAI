@@ -18,7 +18,7 @@ import { theme } from "@/theme";
  */
 export default function InsightsScreen() {
   const insights = useInsights();
-  const alert = insights.data?.current;
+  const alert = insights.data;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
