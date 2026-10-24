@@ -9,8 +9,8 @@ import {
   useDispatchHistory,
   useEmergencyEvaluation,
   useSettings,
-  type EmergencyDecision,
-} from "@/api/care";
+} from "@/api/hooks";
+import type { EmergencyDecision } from "@/api/types";
 import { DispatchHistoryList } from "@/components/DispatchHistoryList";
 import { EmergencyConfirmDialog } from "@/components/EmergencyConfirmDialog";
 import { SimulatedDispatchBadge } from "@/components/SimulatedDispatchBadge";

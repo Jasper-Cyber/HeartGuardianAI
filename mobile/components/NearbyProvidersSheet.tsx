@@ -1,6 +1,7 @@
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from "react-native";
 
-import { useProviders, type ProviderSuggestion } from "@/api/care";
+import { useProviders } from "@/api/hooks";
+import type { ProviderSuggestion } from "@/api/types";
 import { ProviderSuggestionCard } from "@/components/ProviderSuggestionCard";
 import { theme } from "@/theme";
 
@@ -23,7 +24,10 @@ export function NearbyProvidersSheet({
   emergency?: boolean;
   approximateLocation?: boolean;
 }) {
-  const { data, isLoading, isError, error } = useProviders(lat, lon, emergency);
+  const { data, isLoading, isError, error } = useProviders(
+    { lat: lat ?? 0, lon: lon ?? 0, emergency },
+    { enabled: lat != null && lon != null },
+  );
 
   if (lat == null || lon == null) {
     return (
@@ -54,11 +58,11 @@ export function NearbyProvidersSheet({
         <Text style={styles.error}>
           Could not load providers: {(error as Error)?.message ?? "unknown error"}
         </Text>
-      ) : !data || data.items.length === 0 ? (
+      ) : !data || data.length === 0 ? (
         <Text style={styles.empty}>No providers found in the directory.</Text>
       ) : (
         <FlatList
-          data={data.items}
+          data={data}
           keyExtractor={(s: ProviderSuggestion) => String(s.provider.id)}
           renderItem={({ item }) => <ProviderSuggestionCard suggestion={item} />}
           ItemSeparatorComponent={() => <View style={styles.sep} />}

@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 
-import type { DispatchChannel } from "@/api/care";
+import type { DispatchChannel } from "@/api/types";
 import { theme } from "@/theme";
 
 /**

@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 
-import type { DispatchHistoryItem } from "@/api/care";
+import type { DispatchEvent } from "@/api/types";
 import { SimulatedDispatchBadge } from "@/components/SimulatedDispatchBadge";
 import { theme } from "@/theme";
 
@@ -14,7 +14,7 @@ const REASON_LABEL: Record<string, string> = {
   nearest_capable_hospital: "Nearest capable hospital",
 };
 
-export function DispatchHistoryList({ events }: { events: DispatchHistoryItem[] }) {
+export function DispatchHistoryList({ events }: { events: DispatchEvent[] }) {
   if (events.length === 0) {
     return <Text style={styles.empty}>No dispatches yet.</Text>;
   }
