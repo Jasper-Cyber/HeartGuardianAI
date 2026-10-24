@@ -49,11 +49,11 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
 
 ## Phase 3 — Analysis engine
 
-- [ ] 9. Implement baseline + rolling statistics — _Owner: Raffy_
+- [x] 9. Implement baseline + rolling statistics — _Owner: Raffy_
   - `compute_baseline`, `rolling_stats`; persist baselines.
   - _Requirements: 3.1, 3.2_
 
-- [ ] 10. Implement anomaly detectors — _Owner: Raffy_
+- [x] 10. Implement anomaly detectors — _Owner: Raffy_
   - persistent_shift, combination (HR↑ & HRV↓), rhythm_irregularity, data_quality.
   - Thresholds centralized in `analysis_config.py`; reproducible outputs.
   - _Requirements: 3.3–3.8_
