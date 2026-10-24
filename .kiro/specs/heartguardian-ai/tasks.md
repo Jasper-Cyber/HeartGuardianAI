@@ -37,7 +37,7 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
   - Start / Pause / Reset / Scenario-select operations persisted to `sim_state`.
   - _Requirements: 2.1–2.9_
 
-- [ ] 7. Implement SensorAdapter interface + SimulatedSensorAdapter — _Owner: Raffy_
+- [x] 7. Implement SensorAdapter interface + SimulatedSensorAdapter — _Owner: Raffy_
   - Define `SensorAdapter` protocol; implement `SimulatedSensorAdapter`.
   - Add interface-only `AppleHealthAdapter`, `HealthConnectAdapter`, `BluetoothSensorAdapter` stubs.
   - _Requirements: 6.1–6.4_
