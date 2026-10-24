@@ -111,7 +111,7 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
   - `POST /emergency/evaluate`, `POST /emergency/dispatch` (simulated default, requires confirm; real gated by opt-in flag), `GET /emergency/history`.
   - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.6, 11.7, 11.9, 11.10_
 
-- [ ] 21. Disclaimer + settings (backend + shared) — _Owner: maiabrunne_
+- [x] 21. Disclaimer + settings (backend + shared) — _Owner: maiabrunne_
   - `POST /settings/disclaimer-ack`; disclaimer copy as a shared constant; concise experimental notice string.
   - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.6, 12.7_
 
@@ -124,12 +124,12 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
   - First-launch `DisclaimerModal` with one-time acknowledgement; accessible from Settings; `ExperimentalNotice` on alert/dispatch surfaces.
   - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6_
 
-- [ ] 24. Nearby provider suggestions (mobile) — _Owner: maiabrunne_
+- [x] 24. Nearby provider suggestions (mobile) — _Owner: maiabrunne_
   - When suggestions enabled, on `trend_review`/`attention` show `NearbyProvidersSheet` with ranked `ProviderSuggestionCard`s + distances; manual open allowed when disabled.
   - Location via `expo-location` with approximate-location fallback indicator.
   - _Requirements: 10.5, 10.6, 10.7, 10.8, 10.9_
 
-- [ ] 25. Emergency response flow (mobile) — _Owner: maiabrunne_
+- [x] 25. Emergency response flow (mobile) — _Owner: maiabrunne_
   - Only when enabled: emergency route with routing decision, recipient, payload preview, confirm-with-countdown + Cancel, simulated/real badge.
   - Always show static emergency-services guidance alongside dispatch; dispatch history list.
   - _Requirements: 11.2, 11.4, 11.5, 11.6, 11.7, 11.8_
