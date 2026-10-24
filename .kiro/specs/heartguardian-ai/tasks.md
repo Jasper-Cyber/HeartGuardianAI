@@ -26,7 +26,7 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
   - Implement repository functions (insert/query readings, upsert baseline, store findings/alerts, read/update sim_state).
   - _Requirements: 7.2, 7.3, 2.9_
 
-- [ ] 5. Seed synthetic sample history — _Owner: Jasper-Cyber_
+- [x] 5. Seed synthetic sample history — _Owner: Jasper-Cyber_
   - Add a `seed_data.py` script that generates a labeled synthetic dataset for demos.
   - _Requirements: 5.4, 8.4_
 
@@ -42,11 +42,9 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
   - Add interface-only `AppleHealthAdapter`, `HealthConnectAdapter`, `BluetoothSensorAdapter` stubs.
   - _Requirements: 6.1–6.4_
 
-- [~] 8. Wire simulator + scenario endpoints — _Owner: Jasper-Cyber_
+- [x] 8. Wire simulator + scenario endpoints — _Owner: Jasper-Cyber_
   - `GET/POST /scenario`, `POST /simulator/{start|pause|reset}`, `GET /measurements`.
-  - DONE: endpoints + sim_state transitions + Reset-clears-readings, all tested.
-  - PENDING: live data generation plugs into the integration seam in `routers/simulator.py`
-    once SimulatorService (Task 6, Raffy) lands.
+  - Start now generates a batch via SimulatorService; reset clears readings + cursor. All tested.
   - _Requirements: 2.6, 7.1, 7.4_
 
 ## Phase 3 — Analysis engine
@@ -60,7 +58,7 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
   - Thresholds centralized in `analysis_config.py`; reproducible outputs.
   - _Requirements: 3.3–3.8_
 
-- [ ] 11. Expose analysis endpoints — _Owner: Jasper-Cyber_
+- [x] 11. Expose analysis endpoints — _Owner: Jasper-Cyber_
   - `POST /analysis/run`, `GET /trends?range=daily|weekly|monthly`.
   - _Requirements: 7.1, 5.1, 5.2, 5.3_
 
@@ -96,24 +94,24 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
 
 ## Phase 6 — Care network & emergency response
 
-- [ ] 18. Care profile + contacts + settings data layer (backend) — _Owner: maiabrunne_
+- [x] 18. Care profile + contacts + settings data layer (backend) — _Owner: maiabrunne_
   - Add `user_settings`, `care_profiles`, `emergency_contacts`, `providers`, `dispatch_events` tables + repository functions.
   - Seed a synthetic provider directory (doctors + hospitals with lat/lon + capability flags).
   - Feature flags default: suggestions OFF, emergency OFF; expose `GET/PUT /settings`.
   - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.10, 11.1_
 
-- [ ] 19. ProviderService + endpoints — _Owner: maiabrunne_
+- [x] 19. ProviderService + endpoints — _Owner: maiabrunne_
   - Haversine distance; non-emergency ranking by distance; emergency ranking by capability then distance; preferred-doctor flag.
   - `GET/PUT /care/profile`, `GET /providers?lat&lon&emergency`.
   - _Requirements: 10.4, 10.5, 10.6, 10.7_
 
-- [ ] 20. EmergencyService + NotifierAdapter + endpoints — _Owner: maiabrunne_
+- [x] 20. EmergencyService + NotifierAdapter + endpoints — _Owner: maiabrunne_
   - Respect `emergency_enabled` flag (off => no dispatch path). Routing rule (preferred-reachable vs nearest-capable) in `emergency_config.py`; payload assembly; `SimulatedNotifier`.
   - Future interface-only `SmsNotifierAdapter`/`VoiceCallNotifierAdapter` stubs.
   - `POST /emergency/evaluate`, `POST /emergency/dispatch` (simulated default, requires confirm; real gated by opt-in flag), `GET /emergency/history`.
   - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.6, 11.7, 11.9, 11.10_
 
-- [ ] 21. Disclaimer + settings (backend + shared) — _Owner: maiabrunne_
+- [x] 21. Disclaimer + settings (backend + shared) — _Owner: maiabrunne_
   - `POST /settings/disclaimer-ack`; disclaimer copy as a shared constant; concise experimental notice string.
   - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.6, 12.7_
 
@@ -126,12 +124,12 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
   - First-launch `DisclaimerModal` with one-time acknowledgement; accessible from Settings; `ExperimentalNotice` on alert/dispatch surfaces.
   - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6_
 
-- [ ] 24. Nearby provider suggestions (mobile) — _Owner: maiabrunne_
+- [x] 24. Nearby provider suggestions (mobile) — _Owner: maiabrunne_
   - When suggestions enabled, on `trend_review`/`attention` show `NearbyProvidersSheet` with ranked `ProviderSuggestionCard`s + distances; manual open allowed when disabled.
   - Location via `expo-location` with approximate-location fallback indicator.
   - _Requirements: 10.5, 10.6, 10.7, 10.8, 10.9_
 
-- [ ] 25. Emergency response flow (mobile) — _Owner: maiabrunne_
+- [x] 25. Emergency response flow (mobile) — _Owner: maiabrunne_
   - Only when enabled: emergency route with routing decision, recipient, payload preview, confirm-with-countdown + Cancel, simulated/real badge.
   - Always show static emergency-services guidance alongside dispatch; dispatch history list.
   - _Requirements: 11.2, 11.4, 11.5, 11.6, 11.7, 11.8_
@@ -151,7 +149,7 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
     disclaimer acknowledgement gating; feature-toggle behavior.
   - _Requirements: 9.1, 9.2_
 
-- [ ] 28. README, demo script, screenshots — _Owner: Jasper-Cyber (all contribute)_
+- [x] 28. README, demo script, screenshots — _Owner: Jasper-Cyber (all contribute)_
   - Install/config/run for backend and mobile; demo walkthrough; screenshot references.
   - Document the optional care-profile setup, provider suggestions on a warning, the (simulated-by-default,
     opt-in) emergency flow, and the experimental disclaimer; include how to safely enable a real notifier channel.
