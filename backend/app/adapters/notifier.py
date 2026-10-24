@@ -1,74 +1,58 @@
-"""NotifierAdapter interface + SimulatedNotifier (Task 20, Owner: maiabrunne).
+"""NotifierAdapter interface + implementations (Task 20).
 
-A :class:`NotifierAdapter` isolates the dispatch channel from the
-:class:`~app.services.emergency.EmergencyService`. The MVP ships only
-:class:`SimulatedNotifier`, which records/returns a result WITHOUT contacting any
+Isolates the dispatch *channel* from the EmergencyService. The MVP ships only
+`SimulatedNotifier`, which records/returns the dispatch WITHOUT contacting any
 real recipient (Req 11.6). Real channels are interface-only stubs that require
-opt-in configuration and consent before they could ever be implemented.
+explicit opt-in config + consent before they could ever be implemented.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol
+
+from ..db.care_models import Provider
 
 
-@dataclass(frozen=True)
+@dataclass(slots=True)
 class DispatchResult:
-    """Outcome of a notifier send.
-
-    ``status`` is one of ``'sent'`` | ``'failed'``. ``detail`` carries a short,
-    human-readable note (e.g. that nothing was actually sent in simulation).
-    """
-
-    status: str
+    delivered: bool
+    channel: str
     detail: str
 
 
-@runtime_checkable
 class NotifierAdapter(Protocol):
-    """Pluggable dispatch channel."""
-
-    channel: str
-
-    def send(self, recipient: dict[str, Any], payload: dict[str, Any]) -> DispatchResult: ...
+    def send(self, recipient: Provider, payload: dict) -> DispatchResult: ...
 
 
 class SimulatedNotifier:
-    """Default notifier: records intent and returns success, contacting no one (Req 11.6)."""
+    """Default MVP notifier. Never contacts a real recipient; just reports success."""
 
     channel = "simulated"
 
-    def send(self, recipient: dict[str, Any], payload: dict[str, Any]) -> DispatchResult:
-        name = recipient.get("name", "unknown recipient")
+    def send(self, recipient: Provider, payload: dict) -> DispatchResult:
         return DispatchResult(
-            status="sent",
+            delivered=True,
+            channel=self.channel,
             detail=(
-                f"SIMULATED dispatch recorded for '{name}'. No real message was sent; "
-                "this is an in-app demonstration only."
+                f"SIMULATED: would notify {recipient.kind} '{recipient.name}' "
+                f"({recipient.phone or 'no phone'}). No real message was sent."
             ),
         )
 
 
-# --- Interface-only, future channels (require opt-in config + consent) -----
-class SmsNotifierAdapter:
-    """Future SMS channel. Not implemented in the MVP (Req 11, safety-gated)."""
+class SmsNotifierAdapter:  # pragma: no cover - interface-only, future
+    """Future: send an SMS. Requires opt-in config + consent + a provider integration."""
 
     channel = "real"
 
-    def send(self, recipient: dict[str, Any], payload: dict[str, Any]) -> DispatchResult:  # noqa: ARG002
-        raise NotImplementedError(
-            "SmsNotifierAdapter is interface-only in the MVP. A real SMS channel requires "
-            "explicit opt-in configuration, credentials, and user consent."
-        )
+    def send(self, recipient: Provider, payload: dict) -> DispatchResult:
+        raise NotImplementedError("SmsNotifierAdapter is not implemented in the MVP.")
 
 
-class VoiceCallNotifierAdapter:
-    """Future voice-call channel. Not implemented in the MVP (Req 11, safety-gated)."""
+class VoiceCallNotifierAdapter:  # pragma: no cover - interface-only, future
+    """Future: place a voice call. Requires opt-in config + consent."""
 
     channel = "real"
 
-    def send(self, recipient: dict[str, Any], payload: dict[str, Any]) -> DispatchResult:  # noqa: ARG002
-        raise NotImplementedError(
-            "VoiceCallNotifierAdapter is interface-only in the MVP. A real voice channel requires "
-            "explicit opt-in configuration, credentials, and user consent."
-        )
+    def send(self, recipient: Provider, payload: dict) -> DispatchResult:
+        raise NotImplementedError("VoiceCallNotifierAdapter is not implemented in the MVP.")

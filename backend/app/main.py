@@ -63,10 +63,10 @@ def health() -> dict[str, str]:
 # Each feature owner appends ONE line here as their router lands (see TEAM.md
 # "Shared files" guidance). Keep these additive to avoid merge conflicts.
 # ---------------------------------------------------------------------------
-from .routers import care, measurements, settings, simulator  # noqa: E402
+from .routers import emergency, measurements, providers, settings, simulator  # noqa: E402
 
 app.include_router(measurements.router)
 app.include_router(simulator.router)
 app.include_router(settings.router)
-# Care profile / providers / emergency routers (Tasks 19-21, 24-25, Owner: maiabrunne).
-app.include_router(care.router)
+app.include_router(providers.router)
+app.include_router(emergency.router)

@@ -1,53 +1,43 @@
-"""ProviderService — directory lookup + distance ranking (Task 19, Owner: maiabrunne).
+"""ProviderService — nearby-provider suggestions (Task 19).
 
 Computes great-circle (haversine) distance from the user's location to each
-provider and ranks the directory for either a non-emergency suggestion or an
-emergency (Req 10.4–10.7):
+provider in the seeded directory and ranks them:
+  - non-emergency: by distance ascending
+  - emergency: cardiac-capable providers first, then by distance
 
-- Non-emergency: order purely by distance.
-- Emergency: cardiac-capable providers first, then by distance.
-
-The user's preferred doctor is flagged in results (Req 10.9). All provider data is
-synthetic in the MVP (Req 10.10). Ranking is pure/deterministic for fixed inputs.
-
-Builds on the Task 18 data layer: reads ``Provider`` dataclasses from
-``care_repository`` (which manages its own connections), so this service takes no
-connection handle.
+The user's preferred doctor (if any) is flagged in the results. All providers
+are synthetic/for-demonstration (Req 10.8).
 """
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import Optional
 
-from ..db import care_repository as repo
+from ..db import care_repository as care
 from ..db.care_models import Provider
 
 EARTH_RADIUS_KM = 6371.0088
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Great-circle distance between two lat/lon points, in kilometres."""
-    r_lat1, r_lat2 = math.radians(lat1), math.radians(lat2)
-    d_lat = math.radians(lat2 - lat1)
-    d_lon = math.radians(lon2 - lon1)
-    a = (
-        math.sin(d_lat / 2) ** 2
-        + math.cos(r_lat1) * math.cos(r_lat2) * math.sin(d_lon / 2) ** 2
-    )
+    """Great-circle distance between two lat/lon points, in kilometers."""
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlambda / 2) ** 2
     return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(a))
 
 
-@dataclass(frozen=True)
+@dataclass(slots=True)
 class ProviderSuggestion:
-    """A ranked provider plus its distance and preferred flag."""
-
     provider: Provider
     distance_km: float
     is_preferred: bool
 
 
 class ProviderService:
-    """Ranks the seeded provider directory relative to a location."""
+    """Ranks the provider directory by suitability for a given location."""
 
     def suggest(
         self,
@@ -55,34 +45,27 @@ class ProviderService:
         lon: float,
         *,
         emergency: bool = False,
-        preferred_id: int | None = None,
+        preferred_id: Optional[int] = None,
+        limit: Optional[int] = None,
     ) -> list[ProviderSuggestion]:
-        """Return provider suggestions ranked by suitability.
-
-        Distance is rounded to 2 dp for display stability. Ranking is deterministic:
-        ties break by provider id so repeated calls return identical order (Req 10.7).
-        """
-        suggestions: list[ProviderSuggestion] = []
-        for p in repo.list_providers():
-            distance = round(haversine_km(lat, lon, p.lat, p.lon), 2)
-            suggestions.append(
-                ProviderSuggestion(
-                    provider=p,
-                    distance_km=distance,
-                    is_preferred=preferred_id is not None and p.id == preferred_id,
-                )
+        providers = care.list_providers()
+        suggestions = [
+            ProviderSuggestion(
+                provider=p,
+                distance_km=round(haversine_km(lat, lon, p.lat, p.lon), 3),
+                is_preferred=(preferred_id is not None and p.id == preferred_id),
             )
+            for p in providers
+        ]
 
         if emergency:
-            # Cardiac-capable first (0 sorts before 1), then nearest, then id.
+            # Cardiac-capable first, then nearest. (False < True, so negate.)
             suggestions.sort(
-                key=lambda s: (
-                    0 if s.provider.can_handle_cardiac_emergency else 1,
-                    s.distance_km,
-                    s.provider.id or 0,
-                )
+                key=lambda s: (not s.provider.can_handle_cardiac_emergency, s.distance_km)
             )
         else:
-            suggestions.sort(key=lambda s: (s.distance_km, s.provider.id or 0))
+            suggestions.sort(key=lambda s: s.distance_km)
 
+        if limit is not None:
+            suggestions = suggestions[:limit]
         return suggestions

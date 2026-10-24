@@ -1,46 +1,48 @@
 import { StyleSheet, Text, View } from "react-native";
 
-import { parseDispatchPayload, type DispatchEvent } from "@/api/care";
+import type { DispatchHistoryItem } from "@/api/care";
 import { SimulatedDispatchBadge } from "@/components/SimulatedDispatchBadge";
 import { theme } from "@/theme";
 
 /**
  * Past-dispatch history (Task 25, Owner: maiabrunne).
  * Lists each dispatch with timestamp, recipient, routing reason, channel and status
- * so the flow is auditable (Req 11.7).
+ * so the flow is auditable (Req 11.7). Matches the backend's flat HistoryItem shape.
  */
 const REASON_LABEL: Record<string, string> = {
   preferred_doctor_reachable: "Preferred doctor (reachable)",
   nearest_capable_hospital: "Nearest capable hospital",
 };
 
-export function DispatchHistoryList({ events }: { events: DispatchEvent[] }) {
+export function DispatchHistoryList({ events }: { events: DispatchHistoryItem[] }) {
   if (events.length === 0) {
     return <Text style={styles.empty}>No dispatches yet.</Text>;
   }
   return (
     <View style={styles.list}>
-      {events.map((e) => {
-        const patientName = parseDispatchPayload(e.payload)?.patient.name;
-        return (
-        <View key={e.id} style={styles.item}>
+      {events.map((e) => (
+        <View key={e.id ?? Math.random()} style={styles.item}>
           <View style={styles.row}>
             <Text style={styles.recipient} numberOfLines={1}>
-              {patientName ? `For ${patientName}` : `Dispatch #${e.id}`}
+              {e.recipientProviderId != null
+                ? `Provider #${e.recipientProviderId}`
+                : `Dispatch #${e.id ?? "?"}`}
             </Text>
             <SimulatedDispatchBadge channel={e.channel} />
           </View>
           <Text style={styles.meta}>{formatTime(e.createdAt)}</Text>
-          <Text style={styles.meta}>Routing: {REASON_LABEL[e.routingReason] ?? e.routingReason}</Text>
+          <Text style={styles.meta}>
+            Routing: {REASON_LABEL[e.routingReason] ?? e.routingReason}
+          </Text>
           <Text style={[styles.status, statusStyle(e.status)]}>Status: {e.status}</Text>
         </View>
-        );
-      })}
+      ))}
     </View>
   );
 }
 
-function formatTime(iso: string): string {
+function formatTime(iso?: string | null): string {
+  if (!iso) return "—";
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
 }

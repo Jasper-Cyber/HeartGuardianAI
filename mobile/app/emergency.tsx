@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
+  useCareProfile,
   useDispatch,
   useDispatchHistory,
   useEmergencyEvaluation,
@@ -24,48 +25,50 @@ import { theme } from "@/theme";
  * countdown dialog (Req 11.5). Simulated by default with a simulated/real badge
  * (Req 11.6). Static emergency-services guidance is always shown (Req 11.8), and
  * past dispatches are listed (Req 11.7).
+ *
+ * Wired to the merged Task 20 backend contract: evaluate/dispatch take lat/lon +
+ * findingSummary and the server re-evaluates routing on dispatch.
  */
 export default function EmergencyScreen() {
-  const params = useLocalSearchParams<{ alertState?: string }>();
-  const alertState = params.alertState ?? "attention";
+  const params = useLocalSearchParams<{ findingSummary?: string }>();
+  const findingSummary = params.findingSummary ?? "Experimental monitoring signal flagged for review.";
 
   const settings = useSettings();
-  const location = useUserLocation();
+  const careProfile = useCareProfile();
+  const location = useUserLocation(
+    careProfile.data?.defaultLat ?? undefined,
+    careProfile.data?.defaultLon ?? undefined,
+  );
   const evaluate = useEmergencyEvaluation();
   const dispatch = useDispatch();
   const history = useDispatchHistory();
 
   const [decision, setDecision] = useState<EmergencyDecision | null>(null);
-  const [guidance, setGuidance] = useState<string>("");
-  const [notice, setNotice] = useState<string>("");
   const [confirming, setConfirming] = useState(false);
   const [lastResult, setLastResult] = useState<string | null>(null);
 
   const enabled = settings.data?.emergencyEnabled ?? false;
+  const guidance = decision?.emergencyGuidance ?? "";
+  const channel = decision?.channel ?? "simulated";
 
   // Evaluate once location + settings are ready and the feature is enabled.
   useEffect(() => {
     if (!enabled || !location.resolved) return;
     evaluate.mutate(
-      { alertState, lat: location.lat, lon: location.lon, locationApproximate: location.approximate },
-      {
-        onSuccess: (res) => {
-          setDecision(res.decision);
-          setGuidance(res.emergencyGuidance);
-          setNotice(res.notice);
-        },
-      },
+      { lat: location.lat, lon: location.lon, findingSummary },
+      { onSuccess: (res) => setDecision(res.enabled ? res : null) },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, location.resolved, alertState]);
+  }, [enabled, location.resolved, findingSummary]);
 
   const onConfirm = () => {
-    if (!decision) return;
     dispatch.mutate(
-      { decision, confirmed: true },
+      { lat: location.lat, lon: location.lon, findingSummary, confirmed: true },
       {
         onSuccess: (res) => {
-          setLastResult(res.detail);
+          setLastResult(
+            `Dispatch ${res.status} via ${res.channel} channel (event #${res.id ?? "?"}).`,
+          );
           setConfirming(false);
           void history.refetch();
         },
@@ -81,7 +84,10 @@ export default function EmergencyScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.h1}>Emergency response</Text>
-        {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+        <Text style={styles.notice}>
+          Experimental prototype — not medical advice, not a diagnosis. Acting on warnings is your
+          decision.
+        </Text>
 
         {/* Static guidance is ALWAYS shown, independent of dispatch (Req 11.8). */}
         <View style={styles.guidanceCard}>
@@ -102,16 +108,12 @@ export default function EmergencyScreen() {
           </View>
         ) : location.loading || evaluate.isPending ? (
           <ActivityIndicator color={theme.colors.accent} style={styles.loader} />
-        ) : decision ? (
-          <DecisionPreview
-            decision={decision}
-            approximate={location.approximate}
-            onStart={() => setConfirming(true)}
-          />
+        ) : decision && decision.recipientName ? (
+          <DecisionPreview decision={decision} approximate={location.approximate} onStart={() => setConfirming(true)} />
         ) : (
           <View style={styles.card}>
             <Text style={styles.body}>
-              No dispatch is recommended for the current state. The guidance above still applies.
+              No dispatch is recommended right now. The guidance above still applies.
             </Text>
           </View>
         )}
@@ -126,15 +128,15 @@ export default function EmergencyScreen() {
         {history.isLoading ? (
           <ActivityIndicator color={theme.colors.accent} />
         ) : (
-          <DispatchHistoryList events={history.data?.events ?? []} />
+          <DispatchHistoryList events={history.data ?? []} />
         )}
       </ScrollView>
 
-      {decision ? (
+      {decision && decision.recipientName ? (
         <EmergencyConfirmDialog
           visible={confirming}
-          recipientName={decision.recipient.name}
-          channel={decision.channel}
+          recipientName={decision.recipientName}
+          channel={channel}
           onConfirm={onConfirm}
           onCancel={() => setConfirming(false)}
           busy={dispatch.isPending}
@@ -153,29 +155,33 @@ function DecisionPreview({
   approximate: boolean;
   onStart: () => void;
 }) {
-  const { recipient, routingReason, payload, channel } = decision;
+  const payload = decision.payload as
+    | { location?: { lat?: number; lon?: number; approximate?: boolean }; findingSummary?: string }
+    | null
+    | undefined;
+  const loc = payload?.location;
   return (
     <View style={styles.card}>
       <View style={styles.row}>
         <Text style={styles.cardTitle}>Would contact</Text>
-        <SimulatedDispatchBadge channel={channel} />
+        <SimulatedDispatchBadge channel={decision.channel ?? "simulated"} />
       </View>
-      <Text style={styles.recipient}>{recipient.name}</Text>
-      <Text style={styles.body}>
-        {[recipient.kind, recipient.specialty].filter(Boolean).join(" · ")}
-      </Text>
+      <Text style={styles.recipient}>{decision.recipientName}</Text>
       <Text style={styles.meta}>
-        Routing: {routingReason === "preferred_doctor_reachable" ? "preferred doctor (reachable)" : "nearest capable hospital"}
+        Routing:{" "}
+        {decision.routingReason === "preferred_doctor_reachable"
+          ? "preferred doctor (reachable)"
+          : "nearest capable hospital"}
       </Text>
 
       <Text style={styles.sectionLabel}>Payload preview</Text>
-      <Text style={styles.meta}>Patient: {payload.patient.name ?? "—"} · {payload.patient.phone ?? "—"}</Text>
-      <Text style={styles.meta}>
-        Location: {payload.location.lat.toFixed(4)}, {payload.location.lon.toFixed(4)}
-        {approximate || payload.location.approximate ? " (approximate)" : ""}
-      </Text>
-      <Text style={styles.meta}>Emergency contacts: {payload.emergencyContacts.length}</Text>
-      <Text style={styles.summary}>{payload.findingSummary}</Text>
+      {loc && loc.lat != null && loc.lon != null ? (
+        <Text style={styles.meta}>
+          Location: {loc.lat.toFixed(4)}, {loc.lon.toFixed(4)}
+          {approximate || loc.approximate ? " (approximate)" : ""}
+        </Text>
+      ) : null}
+      {payload?.findingSummary ? <Text style={styles.summary}>{payload.findingSummary}</Text> : null}
 
       <Pressable style={styles.startBtn} onPress={onStart} accessibilityRole="button">
         <Text style={styles.startText}>Start dispatch…</Text>

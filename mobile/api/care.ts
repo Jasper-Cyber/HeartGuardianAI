@@ -1,10 +1,11 @@
 /**
  * Care-network API hooks + types (Tasks 24-25, Owner: maiabrunne).
  *
- * Self-contained so the provider-suggestion and emergency screens are not blocked
- * on Helenawai's shared `api/client.ts` (Task 13). When that lands, the `apiFetch`
- * helper here can be swapped for the shared client with no change to call sites,
- * and these care-specific types can move into `api/types.ts`.
+ * Wired to the merged backend contract (Tasks 19/20 routers): `/providers`,
+ * `/care/profile`, `/settings`, and `/emergency/{evaluate,dispatch,history}`.
+ * Self-contained so the mobile screens aren't blocked on Helenawai's shared
+ * `api/client.ts` (Task 13); when that lands, `apiFetch` can be swapped for it
+ * and these types moved into `api/types.ts`.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -41,16 +42,13 @@ export class ApiError extends Error {
 }
 
 // ---------------------------------------------------------------------------
-// Types (mirror the backend shapes)
+// Types (mirror the merged backend shapes)
 // ---------------------------------------------------------------------------
 export type ProviderKind = "doctor" | "hospital";
 export type DispatchChannel = "simulated" | "real";
-export type RoutingReason =
-  | "preferred_doctor_reachable"
-  | "nearest_capable_hospital";
 
 export interface Provider {
-  id: number;
+  id: number | null;
   kind: ProviderKind;
   name: string;
   specialty?: string | null;
@@ -68,6 +66,13 @@ export interface ProviderSuggestion {
   isPreferred: boolean;
 }
 
+/** GET /providers response (Task 19 contract). */
+export interface SuggestionsResponse {
+  count: number;
+  isExperimental: boolean;
+  items: ProviderSuggestion[];
+}
+
 export interface EmergencyContact {
   name: string;
   relationship?: string | null;
@@ -75,61 +80,47 @@ export interface EmergencyContact {
   priority: number;
 }
 
-export interface DispatchPayload {
-  patient: { name?: string | null; phone?: string | null };
-  location: {
-    lat: number;
-    lon: number;
-    approximate: boolean;
-    description?: string | null;
-  };
+export interface CareProfile {
+  fullName?: string | null;
+  phone?: string | null;
+  defaultLat?: number | null;
+  defaultLon?: number | null;
+  preferredProviderId?: number | null;
   emergencyContacts: EmergencyContact[];
-  findingSummary: string;
-  isExperimental: true;
 }
 
+/** POST /emergency/evaluate response — flat DecisionOut (Task 20 contract). */
 export interface EmergencyDecision {
-  recipient: Provider;
-  routingReason: RoutingReason;
-  payload: DispatchPayload;
-  channel: DispatchChannel;
-}
-
-export interface EmergencyEvaluation {
-  decision: EmergencyDecision | null;
   enabled: boolean;
+  recipientProviderId?: number | null;
+  recipientName?: string | null;
+  routingReason?: string | null;
+  payload?: Record<string, unknown> | null;
+  channel?: DispatchChannel | null;
   emergencyGuidance: string;
-  notice: string;
+  isExperimental: boolean;
 }
 
+/** POST /emergency/dispatch response (Task 20 contract). */
 export interface DispatchResult {
-  id: number;
-  status: "pending_confirm" | "cancelled" | "sent" | "failed";
+  id: number | null;
+  recipientProviderId: number | null;
+  routingReason: string;
   channel: DispatchChannel;
-  detail: string;
-  emergencyGuidance?: string;
-  notice?: string;
+  status: "pending_confirm" | "cancelled" | "sent" | "failed";
+  payload: Record<string, unknown>;
+  emergencyGuidance: string;
+  isExperimental: boolean;
 }
 
-export interface DispatchEvent {
-  id: number;
-  alertId: number | null;
+/** GET /emergency/history item (flat; no payload) (Task 20 contract). */
+export interface DispatchHistoryItem {
+  id: number | null;
   recipientProviderId: number | null;
-  routingReason: RoutingReason;
+  routingReason: string;
   channel: DispatchChannel;
   status: string;
-  /** Stored as JSON text by the backend; use `parseDispatchPayload` to read it. */
-  payload: string;
-  createdAt: string;
-}
-
-/** Safely parse a dispatch event's JSON payload string. Returns null on bad data. */
-export function parseDispatchPayload(payload: string): DispatchPayload | null {
-  try {
-    return JSON.parse(payload) as DispatchPayload;
-  } catch {
-    return null;
-  }
+  createdAt?: string | null;
 }
 
 export interface Settings {
@@ -137,6 +128,7 @@ export interface Settings {
   suggestionsEnabled: boolean;
   emergencyEnabled: boolean;
   disclaimerAckAt: string | null;
+  updatedAt?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -149,6 +141,13 @@ export function useSettings() {
   });
 }
 
+export function useCareProfile() {
+  return useQuery({
+    queryKey: ["careProfile"],
+    queryFn: () => apiFetch<CareProfile | null>("/care/profile"),
+  });
+}
+
 export function useProviders(
   lat: number | null,
   lon: number | null,
@@ -158,33 +157,38 @@ export function useProviders(
     queryKey: ["providers", lat, lon, emergency],
     enabled: lat != null && lon != null,
     queryFn: () =>
-      apiFetch<{ suggestions: ProviderSuggestion[]; isSynthetic: boolean }>(
+      apiFetch<SuggestionsResponse>(
         `/providers?lat=${lat}&lon=${lon}&emergency=${emergency}`,
       ),
   });
 }
 
 export interface EvaluateArgs {
-  alertState: string;
   lat: number | null;
   lon: number | null;
-  locationApproximate?: boolean;
+  findingSummary?: string;
 }
 
 export function useEmergencyEvaluation() {
   return useMutation({
     mutationFn: (args: EvaluateArgs) =>
-      apiFetch<EmergencyEvaluation>("/emergency/evaluate", {
+      apiFetch<EmergencyDecision>("/emergency/evaluate", {
         method: "POST",
-        body: JSON.stringify(args),
+        body: JSON.stringify({
+          lat: args.lat,
+          lon: args.lon,
+          findingSummary: args.findingSummary ?? "Experimental monitoring signal.",
+        }),
       }),
   });
 }
 
 export interface DispatchArgs {
-  decision: EmergencyDecision;
-  confirmed: boolean;
+  lat: number | null;
+  lon: number | null;
+  findingSummary?: string;
   channel?: DispatchChannel;
+  confirmed: boolean;
   alertId?: number | null;
 }
 
@@ -194,7 +198,14 @@ export function useDispatch() {
     mutationFn: (args: DispatchArgs) =>
       apiFetch<DispatchResult>("/emergency/dispatch", {
         method: "POST",
-        body: JSON.stringify(args),
+        body: JSON.stringify({
+          lat: args.lat,
+          lon: args.lon,
+          findingSummary: args.findingSummary ?? "Experimental monitoring signal.",
+          channel: args.channel ?? "simulated",
+          confirmed: args.confirmed,
+          alertId: args.alertId ?? null,
+        }),
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["dispatchHistory"] });
@@ -205,7 +216,6 @@ export function useDispatch() {
 export function useDispatchHistory() {
   return useQuery({
     queryKey: ["dispatchHistory"],
-    queryFn: () =>
-      apiFetch<{ events: DispatchEvent[] }>("/emergency/history"),
+    queryFn: () => apiFetch<DispatchHistoryItem[]>("/emergency/history"),
   });
 }

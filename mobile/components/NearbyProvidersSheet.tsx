@@ -54,11 +54,11 @@ export function NearbyProvidersSheet({
         <Text style={styles.error}>
           Could not load providers: {(error as Error)?.message ?? "unknown error"}
         </Text>
-      ) : !data || data.suggestions.length === 0 ? (
+      ) : !data || data.items.length === 0 ? (
         <Text style={styles.empty}>No providers found in the directory.</Text>
       ) : (
         <FlatList
-          data={data.suggestions}
+          data={data.items}
           keyExtractor={(s: ProviderSuggestion) => String(s.provider.id)}
           renderItem={({ item }) => <ProviderSuggestionCard suggestion={item} />}
           ItemSeparatorComponent={() => <View style={styles.sep} />}
