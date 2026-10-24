@@ -153,6 +153,26 @@ are never blocked waiting on the backend.
   intended behavior — they are out of scope for the import fix above. Owners: please check your
   module's failing tests.
 
+- **Mobile API client ↔ backend response-shape mismatches (owner: Helenawai, fix in progress).**
+  The mobile `api/` layer (Task 13) was written before several endpoints existed and assumed
+  shapes that differ from what the backend actually returns. Backend verified to import/run; these
+  are client-side contract bugs that would break mobile screens at runtime even with the backend up:
+  - **`GET /insights`** returns a *flat* object (`state`, `title`, `explanation`, `nextSteps`,
+    `emergencyGuidance`, `findings`, …). The client expected `{ current, history }`. Breaks the
+    Insights screen and the Dashboard monitoring card + History past-alerts (all read `.current`/`.history`).
+  - **`GET /trends`** series use `metric` and `TrendPoint{period,mean,min,max,count}` with no
+    `baselineStd`. The client expected `metricType` and `TrendPoint{timestamp,value}` + `baselineStd`.
+    Breaks the History trend charts.
+  - **`GET /providers`** returns an envelope `{count,isExperimental,items:[…]}`; the client typed it
+    as a bare array. Breaks `useProviders` (used by the provider-suggestion components).
+  - There is **no past-alerts history endpoint** (`/insights` returns only the current insight), so
+    the History screen's "past alerts" has no data source — needs a backend decision (add endpoint or
+    drop the section).
+
+  Resolution: adapt the **mobile client** to the backend's actual shapes (lower-risk than changing
+  three built+tested endpoints). Tracked on branch `fix/mobile-api-contracts`. The missing
+  past-alerts endpoint is a separate backend-owner decision.
+
 - **Four routers imported but never registered in `main.py` (maiabrunne — fix in progress).** A later merge
   mangled the router-registration block in `backend/app/main.py`: it `import`s
   `analysis, emergency, insights, measurements, providers, settings, simulator`, but only calls
