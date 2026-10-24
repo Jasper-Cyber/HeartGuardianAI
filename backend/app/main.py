@@ -10,12 +10,24 @@ experimental. The service does not diagnose conditions and is not a medical devi
 """
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import __version__
+from .db.connection import init_db
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Create tables and seed the demo user + sim_state on startup (idempotent).
+    init_db()
+    yield
+
 
 app = FastAPI(
+    lifespan=lifespan,
     title="HeartGuardian AI API",
     version=__version__,
     description=(
@@ -45,13 +57,11 @@ def health() -> dict[str, str]:
 # ---------------------------------------------------------------------------
 # Router registration.
 # Each feature owner appends ONE line here as their router lands (see TEAM.md
-# "Shared files" guidance). Keep these additive to avoid merge conflicts, e.g.:
-#
-#   from .routers import measurements
-#   app.include_router(measurements.router)
+# "Shared files" guidance). Keep these additive to avoid merge conflicts.
 # ---------------------------------------------------------------------------
+from .routers import care, measurements, simulator  # noqa: E402
 
+app.include_router(measurements.router)
+app.include_router(simulator.router)
 # Care-network / settings / emergency routers (Tasks 18-21, Owner: maiabrunne).
-from .routers import care  # noqa: E402
-
 app.include_router(care.router)

@@ -13,7 +13,6 @@ from __future__ import annotations
 import sqlite3
 
 from . import care_repository as repo
-from .care_schema import init_care_schema
 
 # Fictional demo "home" location used as the default/approx location in seeds.
 DEMO_HOME_LAT = 37.7749
@@ -78,10 +77,10 @@ SYNTHETIC_PROVIDERS: list[dict] = [
 def seed_providers(conn: sqlite3.Connection, *, reset: bool = False) -> int:
     """Seed the synthetic provider directory. Idempotent unless ``reset=True``.
 
-    Returns the number of providers in the directory afterwards. If the directory
-    is already populated (and ``reset`` is False) this is a no-op.
+    The tables are created by Task 4's ``init_db()`` (via ``schema.sql``) at app
+    startup, so this function only populates rows. Returns the number of providers
+    in the directory afterwards; a no-op if already populated and ``reset`` is False.
     """
-    init_care_schema(conn)
     if reset:
         conn.execute("DELETE FROM providers")
     if repo.count_providers(conn) == 0:

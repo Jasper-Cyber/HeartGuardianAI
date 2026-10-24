@@ -15,7 +15,7 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
-from .care_schema import DEMO_USER_ID
+from .connection import DEMO_USER_ID
 
 
 def _now() -> str:

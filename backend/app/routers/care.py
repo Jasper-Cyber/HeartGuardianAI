@@ -9,8 +9,9 @@ Endpoint groups (all additive to the shared ``main.py``):
 - ``/emergency/dispatch``      gated dispatch, simulated by default (Req 11.5–11.6)
 - ``/emergency/history``       dispatch history (Req 11.7)
 
-A dependency opens one SQLite connection per request and ensures the care schema +
-synthetic provider directory exist, so these routes work even before Task 4 lands.
+A dependency opens one SQLite connection per request (via Task 4's
+``get_connection``) and lazily seeds the synthetic provider directory. The tables
+themselves are created by Task 4's ``init_db()`` at app startup.
 """
 from __future__ import annotations
 
@@ -23,7 +24,7 @@ from pydantic import BaseModel, Field
 from .. import disclaimer as disclaimer_copy
 from .. import emergency_config as cfg
 from ..db import care_repository as repo
-from ..db.connection import connect
+from ..db.connection import get_connection
 from ..db.provider_seed import seed_providers
 from ..services.emergency import EmergencyError, EmergencyService
 from ..services.provider import ProviderService
@@ -32,14 +33,20 @@ router = APIRouter(tags=["care-network"])
 
 
 # ---------------------------------------------------------------------------
-# Per-request connection dependency (self-contained until Task 4's lands).
+# Per-request connection dependency.
+# Uses Task 4's get_connection() (sqlite3's native context manager: commits on
+# success, rolls back on error). We close the connection ourselves afterwards.
 # ---------------------------------------------------------------------------
 def get_conn() -> Iterator[Any]:
-    """Yield a request-scoped SQLite connection with the care schema + seed ready."""
-    conn = connect()
+    """Yield a request-scoped SQLite connection with the provider directory seeded.
+
+    Commits on success, rolls back on error, and always closes. We manage the
+    transaction explicitly rather than nesting sqlite3's connection context
+    manager, so finalizing this generator never operates on a closed connection.
+    """
+    conn = get_connection()
     try:
-        seed_providers(conn)  # idempotent: creates schema + seeds directory once
-        conn.commit()
+        seed_providers(conn)  # idempotent: populates the synthetic directory once
         yield conn
         conn.commit()
     except Exception:
