@@ -1,0 +1,80 @@
+"""ProviderService — directory lookup + distance ranking (Task 19, Owner: maiabrunne).
+
+Computes great-circle (haversine) distance from the user's location to each
+provider and ranks the directory for either a non-emergency suggestion or an
+emergency (Req 10.4–10.7):
+
+- Non-emergency: order purely by distance.
+- Emergency: cardiac-capable providers first, then by distance.
+
+The user's preferred doctor is flagged in results (Req 10.9). All provider data is
+synthetic in the MVP (Req 10.10). Ranking is pure/deterministic for fixed inputs.
+"""
+from __future__ import annotations
+
+import math
+import sqlite3
+from typing import Any
+
+from ..db import care_repository as repo
+
+EARTH_RADIUS_KM = 6371.0088
+
+
+def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance between two lat/lon points, in kilometres."""
+    r_lat1, r_lat2 = math.radians(lat1), math.radians(lat2)
+    d_lat = math.radians(lat2 - lat1)
+    d_lon = math.radians(lon2 - lon1)
+    a = (
+        math.sin(d_lat / 2) ** 2
+        + math.cos(r_lat1) * math.cos(r_lat2) * math.sin(d_lon / 2) ** 2
+    )
+    return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(a))
+
+
+class ProviderService:
+    """Ranks the seeded provider directory relative to a location."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+
+    def suggest(
+        self,
+        lat: float,
+        lon: float,
+        *,
+        emergency: bool = False,
+        preferred_id: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return provider suggestions ranked by suitability.
+
+        Each item is a ``ProviderSuggestion``: ``{provider, distanceKm, isPreferred}``.
+        Distance is rounded to 2 dp for display stability. Ranking is deterministic:
+        ties break by provider id so repeated calls return identical order (Req 10.7).
+        """
+        providers = repo.list_providers(self._conn)
+        suggestions: list[dict[str, Any]] = []
+        for p in providers:
+            distance = round(haversine_km(lat, lon, p["lat"], p["lon"]), 2)
+            suggestions.append(
+                {
+                    "provider": p,
+                    "distanceKm": distance,
+                    "isPreferred": preferred_id is not None and p["id"] == preferred_id,
+                }
+            )
+
+        if emergency:
+            # Cardiac-capable first (0 sorts before 1), then nearest, then id.
+            suggestions.sort(
+                key=lambda s: (
+                    0 if s["provider"]["canHandleCardiacEmergency"] else 1,
+                    s["distanceKm"],
+                    s["provider"]["id"],
+                )
+            )
+        else:
+            suggestions.sort(key=lambda s: (s["distanceKm"], s["provider"]["id"]))
+
+        return suggestions

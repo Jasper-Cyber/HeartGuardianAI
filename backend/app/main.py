@@ -50,3 +50,8 @@ def health() -> dict[str, str]:
 #   from .routers import measurements
 #   app.include_router(measurements.router)
 # ---------------------------------------------------------------------------
+
+# Care-network / settings / emergency routers (Tasks 18-21, Owner: maiabrunne).
+from .routers import care  # noqa: E402
+
+app.include_router(care.router)
