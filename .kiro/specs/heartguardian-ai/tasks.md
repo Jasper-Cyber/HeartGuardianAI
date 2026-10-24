@@ -21,7 +21,7 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
 
 ## Phase 1 — Data layer & SQLite
 
-- [ ] 4. Implement SQLite schema and repository layer — _Owner: Jasper-Cyber_
+- [x] 4. Implement SQLite schema and repository layer — _Owner: Jasper-Cyber_
   - Create schema/migrations for `users`, `measurements`, `baselines`, `anomaly_findings`, `alerts`, `sim_state`.
   - Implement repository functions (insert/query readings, upsert baseline, store findings/alerts, read/update sim_state).
   - _Requirements: 7.2, 7.3, 2.9_
@@ -42,8 +42,11 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
   - Add interface-only `AppleHealthAdapter`, `HealthConnectAdapter`, `BluetoothSensorAdapter` stubs.
   - _Requirements: 6.1–6.4_
 
-- [ ] 8. Wire simulator + scenario endpoints — _Owner: Jasper-Cyber_
+- [~] 8. Wire simulator + scenario endpoints — _Owner: Jasper-Cyber_
   - `GET/POST /scenario`, `POST /simulator/{start|pause|reset}`, `GET /measurements`.
+  - DONE: endpoints + sim_state transitions + Reset-clears-readings, all tested.
+  - PENDING: live data generation plugs into the integration seam in `routers/simulator.py`
+    once SimulatorService (Task 6, Raffy) lands.
   - _Requirements: 2.6, 7.1, 7.4_
 
 ## Phase 3 — Analysis engine
