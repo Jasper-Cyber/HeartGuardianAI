@@ -38,12 +38,17 @@ export function resolveBaseUrl(): string {
 
   // Expo SDK exposes the dev-server host (e.g. "192.168.1.20:8081"); reuse the
   // host so a physical device reaches the same machine on the API port.
+  // `expoConfig.hostUri` is the current field; the older `manifest2` /
+  // `manifest` shapes are read through a loosely-typed view as a fallback for
+  // runtimes that still populate them.
+  const legacy = Constants as unknown as {
+    manifest2?: { extra?: { expoClient?: { hostUri?: string } } };
+    manifest?: { debuggerHost?: string };
+  };
   const hostUri =
     Constants.expoConfig?.hostUri ??
-    // @ts-expect-error legacy manifest field, still present in some runtimes
-    (Constants.manifest2?.extra?.expoClient?.hostUri as string | undefined) ??
-    // @ts-expect-error legacy manifest field
-    (Constants.manifest?.debuggerHost as string | undefined);
+    legacy.manifest2?.extra?.expoClient?.hostUri ??
+    legacy.manifest?.debuggerHost;
 
   if (hostUri) {
     const host = hostUri.split(":")[0];
