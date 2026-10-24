@@ -26,7 +26,7 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
   - Implement repository functions (insert/query readings, upsert baseline, store findings/alerts, read/update sim_state).
   - _Requirements: 7.2, 7.3, 2.9_
 
-- [ ] 5. Seed synthetic sample history — _Owner: Jasper-Cyber_
+- [x] 5. Seed synthetic sample history — _Owner: Jasper-Cyber_
   - Add a `seed_data.py` script that generates a labeled synthetic dataset for demos.
   - _Requirements: 5.4, 8.4_
 
@@ -58,13 +58,13 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
   - Thresholds centralized in `analysis_config.py`; reproducible outputs.
   - _Requirements: 3.3–3.8_
 
-- [ ] 11. Expose analysis endpoints — _Owner: Jasper-Cyber_
+- [x] 11. Expose analysis endpoints — _Owner: Jasper-Cyber_
   - `POST /analysis/run`, `GET /trends?range=daily|weekly|monthly`.
   - _Requirements: 7.1, 5.1, 5.2, 5.3_
 
 ## Phase 4 — Alerts
 
-- [ ] 12. Implement AlertService — _Owner: Raffy_
+- [x] 12. Implement AlertService — _Owner: Raffy_
   - Map findings → `normal | trend_review | attention`; build explanation + next steps.
   - Always attach emergency guidance and experimental label; expose `GET /insights`.
   - _Requirements: 4.1–4.5_
