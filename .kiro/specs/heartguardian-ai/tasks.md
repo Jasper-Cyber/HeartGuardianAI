@@ -1,4 +1,4 @@
-# Implementation Plan — HeartGuardian AI
+﻿# Implementation Plan — HeartGuardian AI
 
 Each phase leaves the app runnable. Check off tasks as they are completed.
 
@@ -32,12 +32,12 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
 
 ## Phase 2 — Simulator
 
-- [ ] 6. Implement SimulatorService with seedable RNG — _Owner: Raffy_
+- [x] 6. Implement SimulatorService with seedable RNG — _Owner: Raffy_
   - Scenario A (Normal), B (Gradual Deviation), C (Rhythm Irregularity) generators; occasional missing/low-quality samples.
   - Start / Pause / Reset / Scenario-select operations persisted to `sim_state`.
   - _Requirements: 2.1–2.9_
 
-- [ ] 7. Implement SensorAdapter interface + SimulatedSensorAdapter — _Owner: Raffy_
+- [x] 7. Implement SensorAdapter interface + SimulatedSensorAdapter — _Owner: Raffy_
   - Define `SensorAdapter` protocol; implement `SimulatedSensorAdapter`.
   - Add interface-only `AppleHealthAdapter`, `HealthConnectAdapter`, `BluetoothSensorAdapter` stubs.
   - _Requirements: 6.1–6.4_
@@ -51,11 +51,11 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
 
 ## Phase 3 — Analysis engine
 
-- [ ] 9. Implement baseline + rolling statistics — _Owner: Raffy_
+- [x] 9. Implement baseline + rolling statistics — _Owner: Raffy_
   - `compute_baseline`, `rolling_stats`; persist baselines.
   - _Requirements: 3.1, 3.2_
 
-- [ ] 10. Implement anomaly detectors — _Owner: Raffy_
+- [x] 10. Implement anomaly detectors — _Owner: Raffy_
   - persistent_shift, combination (HR↑ & HRV↓), rhythm_irregularity, data_quality.
   - Thresholds centralized in `analysis_config.py`; reproducible outputs.
   - _Requirements: 3.3–3.8_
@@ -66,7 +66,7 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
 
 ## Phase 4 — Alerts
 
-- [ ] 12. Implement AlertService — _Owner: Raffy_
+- [x] 12. Implement AlertService — _Owner: Raffy_
   - Map findings → `normal | trend_review | attention`; build explanation + next steps.
   - Always attach emergency guidance and experimental label; expose `GET /insights`.
   - _Requirements: 4.1–4.5_
@@ -138,7 +138,7 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
 
 ## Phase 7 — Tests & docs
 
-- [ ] 26. Python tests (pytest) — _Owner: Raffy_
+- [x] 26. Python tests (pytest) — _Owner: Raffy_
   - Simulator determinism, baseline math, each detector, missing-data, alert mapping, scenario transitions, API routes.
   - Provider distance ranking + emergency-capability ordering; emergency routing rule; payload assembly;
     feature flags respected (suggestions/emergency off => no flow); simulated dispatch records an event and sends nothing;

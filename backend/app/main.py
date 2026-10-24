@@ -63,3 +63,8 @@ from .routers import measurements, simulator  # noqa: E402
 
 app.include_router(measurements.router)
 app.include_router(simulator.router)
+
+# insights router (Raffy, Task 12): GET /insights — explainable, non-diagnostic alerts.
+from .routers import insights  # noqa: E402
+
+app.include_router(insights.router)
