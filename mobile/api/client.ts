@@ -125,11 +125,15 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 
   if (!response.ok) {
     const errBody = parsed as ApiErrorBody | undefined;
-    throw new ApiError(
-      response.status,
-      errBody?.error ?? `Request to ${path} failed with ${response.status}`,
-      errBody,
-    );
+    // FastAPI's default error shape is `{ detail }` (string, or a validation
+    // array). Read `detail` first, then any custom `error` field, then a
+    // generic fallback — so backend messages actually reach the UI.
+    const detail = errBody?.detail;
+    const message =
+      (typeof detail === "string" ? detail : undefined) ??
+      errBody?.error ??
+      `Request to ${path} failed with ${response.status}`;
+    throw new ApiError(response.status, message, errBody);
   }
 
   return parsed as T;
