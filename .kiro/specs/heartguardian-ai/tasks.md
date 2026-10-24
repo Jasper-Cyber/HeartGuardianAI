@@ -1,4 +1,4 @@
-# Implementation Plan — HeartGuardian AI
+﻿# Implementation Plan — HeartGuardian AI
 
 Each phase leaves the app runnable. Check off tasks as they are completed.
 
@@ -136,7 +136,7 @@ Each phase leaves the app runnable. Check off tasks as they are completed.
 
 ## Phase 7 — Tests & docs
 
-- [ ] 26. Python tests (pytest) — _Owner: Raffy_
+- [x] 26. Python tests (pytest) — _Owner: Raffy_
   - Simulator determinism, baseline math, each detector, missing-data, alert mapping, scenario transitions, API routes.
   - Provider distance ranking + emergency-capability ordering; emergency routing rule; payload assembly;
     feature flags respected (suggestions/emergency off => no flow); simulated dispatch records an event and sends nothing;

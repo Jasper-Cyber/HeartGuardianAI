@@ -75,8 +75,8 @@ from .routers import (  # noqa: E402
 
 app.include_router(measurements.router)
 app.include_router(simulator.router)
-app.include_router(settings.router)
-app.include_router(providers.router)
-app.include_router(emergency.router)
-app.include_router(analysis.router)
+
+# insights router (Raffy, Task 12): GET /insights — explainable, non-diagnostic alerts.
+from .routers import insights  # noqa: E402
+
 app.include_router(insights.router)
