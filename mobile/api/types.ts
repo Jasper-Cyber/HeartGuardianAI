@@ -30,12 +30,20 @@ export type RoutingReason = "preferred_doctor_reachable" | "nearest_capable_hosp
 // ---------------------------------------------------------------------------
 
 export interface Reading {
+  id?: number;
   timestamp: string; // ISO-8601 UTC
   metricType: MetricType;
   value: number | null; // null => missing / low-quality
   quality: Quality;
-  isSynthetic: true;
+  isSynthetic: boolean;
   scenario: Scenario;
+}
+
+/** Envelope returned by GET /measurements (count + experimental flag + items). */
+export interface MeasurementsResponse {
+  count: number;
+  isExperimental: boolean;
+  items: Reading[];
 }
 
 /** A single aggregated point on a trend series. */
@@ -86,7 +94,8 @@ export interface ScenarioState {
   scenario: Scenario;
   status: SimulatorStatus;
   seed: number;
-  updatedAt?: string;
+  cursorTs: string | null;
+  updatedAt: string;
 }
 
 // ---------------------------------------------------------------------------

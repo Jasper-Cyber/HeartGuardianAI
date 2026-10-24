@@ -19,6 +19,7 @@ import type {
   DispatchEvent,
   EmergencyDecision,
   InsightsResponse,
+  MeasurementsResponse,
   Provider,
   Reading,
   Scenario,
@@ -132,11 +133,22 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 export const api = {
   health: (signal?: AbortSignal) => request<{ status: string }>("/health", { signal }),
 
-  // Measurements & trends
-  getMeasurements: (
+  // Measurements & trends.
+  // The backend wraps readings in an envelope ({ count, isExperimental, items });
+  // callers that only need the readings can use `getMeasurements`, while
+  // `getMeasurementsEnvelope` exposes the count/flag when needed.
+  getMeasurementsEnvelope: (
     params: { metric?: string; from?: string; to?: string } = {},
     signal?: AbortSignal,
-  ) => request<Reading[]>("/measurements", { query: params, signal }),
+  ) => request<MeasurementsResponse>("/measurements", { query: params, signal }),
+
+  getMeasurements: async (
+    params: { metric?: string; from?: string; to?: string } = {},
+    signal?: AbortSignal,
+  ): Promise<Reading[]> => {
+    const res = await request<MeasurementsResponse>("/measurements", { query: params, signal });
+    return res.items;
+  },
 
   getTrends: (range: TrendRange, signal?: AbortSignal) =>
     request<TrendsResponse>("/trends", { query: { range }, signal }),
